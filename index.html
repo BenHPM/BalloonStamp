@@ -3,11 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="screen-orientation" content="any">
 <title>气球大乱踩</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100dvh; /* dvh 适配移动端浏览器地址栏 */
+  height: 100vh;  /* fallback */
   overflow: hidden;
   background: #000;
   touch-action: none;
@@ -15,16 +18,18 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   position: fixed;
+  --ctrl-h: 140px; /* 控制栏高度变量，横屏会覆盖 */
 }
 #game-wrap {
   display: flex;
   flex-direction: column;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
 }
 canvas {
   display: block;
   width: 100%;
-  flex: 1;
+  height: 100%;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #0a0a2e;
@@ -47,7 +52,7 @@ canvas {
 #controls {
   flex-shrink: 0;
   width: 100%;
-  height: 140px;
+  height: var(--ctrl-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -141,7 +146,7 @@ canvas {
 /* 重生遮罩 */
 #respawn-overlay {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 140px;
+  top: 0; left: 0; right: 0; bottom: var(--ctrl-h);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -167,18 +172,69 @@ canvas {
   50% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
-/* 横屏提示（可选） */
-@media (orientation: landscape) and (max-height: 500px) {
-  #controls { height: 100px; }
-  #flap-btn { width: 80px; height: 80px; font-size: 18px; }
+/* ── 横屏：左右分栏布局 ── */
+@media (orientation: landscape) {
+  :root, html, body { --ctrl-h: 80px; }
+
+  #game-wrap {
+    flex-direction: row; /* canvas 左，controls 右 */
+  }
+
+  /* canvas 父容器占满左侧 */
+  #game-wrap > div:first-child {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+  }
+
+  canvas {
+    /* 尺寸由 JS resize() 控制，此处不覆盖 */
+    flex: none;
+  }
+
+  /* 控制栏竖排在右侧 */
+  #controls {
+    width: 140px;
+    height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 8px;
+    padding-right: max(8px, env(safe-area-inset-right));
+    border-top: none;
+    border-left: 1px solid #333;
+    background: linear-gradient(to right, #111 0%, #0a0a0a 100%);
+  }
+
+  #dpad {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dpad-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+    border-radius: 12px;
+  }
+
+  #flap-btn {
+    width: 90px;
+    height: 90px;
+    font-size: 18px;
+  }
   #flap-btn .emoji { font-size: 24px; }
-  .dpad-btn { width: 56px; height: 56px; font-size: 22px; }
+
+  /* 重生遮罩覆盖 canvas 区域（右侧不遮盖） */
+  #respawn-overlay {
+    bottom: 0;
+    right: 140px; /* 不覆盖右侧控制栏 */
+  }
 }
 </style>
 </head>
 <body>
 <div id="game-wrap">
-  <div style="position:relative;flex:1;min-height:0;">
+  <div style="position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;">
     <div id="hud">
       <span id="hudBalloon">🎈🎈</span>
       <span id="hudState">浮空</span>
@@ -210,7 +266,7 @@ canvas {
 
 <script>
 // ============================================================
-// 气球大乱踩 — 虚拟按键手机版
+// 气球大乱踩 — 虚拟按键手机版（支持横屏分栏）
 // ============================================================
 
 const canvas = document.getElementById('game');
@@ -225,13 +281,18 @@ function resize() {
   const wrap = canvas.parentElement;
   const w = wrap.clientWidth;
   const h = wrap.clientHeight;
-  // 保持 4:3 比例，居中适配
+  if (w === 0 || h === 0) return;
+  // 保持 4:3 比例，居中适配（letterbox/pillarbox）
   scale = Math.min(w / GAME_W, h / GAME_H);
   canvas.width = Math.floor(GAME_W * scale);
   canvas.height = Math.floor(GAME_H * scale);
+  canvas.style.width = canvas.width + 'px';
+  canvas.style.height = canvas.height + 'px';
   ctx.imageSmoothingEnabled = false;
 }
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); });
+// orientationchange 兼容部分移动端浏览器
+window.addEventListener('orientationchange', () => setTimeout(resize, 150));
 resize();
 
 // ---------- 物理参数 ----------
@@ -434,7 +495,7 @@ let respawnState = {
 const enemies = [];
 
 function spawnEnemy(x, y, color, aiLevel, scale) {
-  enemies.push({
+  const enemy = {
     x, y, vx: 0, vy: 0,
     w: Math.round(20 * (scale || 1)),
     h: Math.round(24 * (scale || 1)),
@@ -455,19 +516,28 @@ function spawnEnemy(x, y, color, aiLevel, scale) {
     onGround: false,
     _groundStartFrame: 0,
     groundedZeroTimer: 0,
-    invincible: 0,   // 无敌时间（防挤压连爆）
-    weight: scale || 1, // 重量，影响重力
-  });
+    inflatePhase: 0,      // 0=等待充气 1=正在充气
+    inflateTimer: 0,      // 充气动画计时器
+    invincible: 0,        // 无敌时间（防挤压连爆）
+    weight: scale || 1,   // 重量，影响重力
+  };
+  enemies.push(enemy);
+  return enemy;
 }
 
 function resetEnemies() {
   enemies.length = 0;
-  // 绿巨人：大体型、3个气球、较重
-  spawnEnemy(100, 100, '#4a4', 1, 1.5);
-  // 橙色：普通体型、2个气球、激进
-  spawnEnemy(380, 120, '#f84', 2, 1);
-  // 红色暴躁：普通体型、2个气球、疯狂攻击
-  spawnEnemy(240, 60, '#f33', 3, 1);
+
+  // 红色暴躁：正中央上方，3气球，疯狂追击
+  spawnEnemy(230, 30, '#f33', 3, 1);
+  // 橙色：左侧区域，2气球
+  spawnEnemy(60, 210, '#f84', 2, 1);
+  // 绿巨人：右侧区域，3气球，大体型
+  const green = spawnEnemy(350, 210, '#4a4', 1, 1.5);
+  green.balloons = 3;
+  green.maxBalloons = 3;
+  // 蓝色：中间大平台上方，2气球
+  spawnEnemy(240, 260, '#48f', 2, 1);
 }
 
 // ---------- 碰撞检测 ----------
@@ -578,9 +648,19 @@ function updatePhysics(entity, dt) {
   entity.x += entity.vx;
   entity.y += entity.vy;
 
-  // 屏幕环绕
-  if (entity.x + entity.w < 0) entity.x = GAME_W;
-  if (entity.x > GAME_W) entity.x = -entity.w;
+  // 屏幕环绕（敌人X轴适用）+ 边界约束（所有实体不可飞出屏幕）
+  // 上方边界：所有实体不可飞出
+  if (entity.y < 0) { entity.y = 0; if (entity.vy < 0) entity.vy = 0; }
+
+  if (entity === player) {
+    // 玩家：左右边界硬约束，不穿越
+    if (entity.x < 0) { entity.x = 0; if (entity.vx < 0) entity.vx = 0; }
+    if (entity.x + entity.w > GAME_W) { entity.x = GAME_W - entity.w; if (entity.vx > 0) entity.vx = 0; }
+  } else {
+    // 敌人：左右环绕
+    if (entity.x + entity.w < 0) entity.x = GAME_W;
+    if (entity.x > GAME_W) entity.x = -entity.w;
+  }
 
   const wasOnGround = entity.onGround;
   platformCollision(entity);
@@ -722,6 +802,9 @@ function checkStomps() {
 function gainBalloon(entity) {
   if (entity.balloons < PHYS.maxBalloons) {
     entity.balloons++;
+    entity.groundedZeroTimer = 0;
+    entity.inflatePhase = 0;
+    entity.inflateTimer = 0;
   }
 }
 
@@ -763,36 +846,108 @@ function updateRecharge(dt) {
   }
 }
 
+// ---------- 平台导航 AI ----------
+function findBestPlatform(entity) {
+  // 找到实体最近的、在头顶上方的平台
+  let best = null;
+  let bestDist = Infinity;
+  const ex = entity.x + entity.w / 2;
+  const ey = entity.y + entity.h;
+
+  for (const plat of platforms) {
+    const px = plat.x + plat.w / 2;
+    const py = plat.y;
+    // 平台必须在实体上方（或接近同高度）
+    if (py > ey + 10) continue;
+    const dist = Math.abs(px - ex) + Math.abs(py - ey) * 0.5;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = plat;
+    }
+  }
+  return best;
+}
+
+function navigateToPlatform(entity, target) {
+  if (!target) return;
+  const ex = entity.x + entity.w / 2;
+  const tx = target.x + target.w / 2;
+  const dx = tx - ex;
+
+  // 水平移动向平台
+  entity.targetVx = Math.sign(dx) * Math.min(Math.abs(dx) * 0.03, 2.0);
+
+  // 如果在平台下方，需要频繁拍翅膀飞上去
+  if (entity.y + entity.h > target.y + 15) {
+    entity.flapTimer = 0; // 立即拍翅膀
+  }
+}
+
 // ---------- 敌人 AI ----------
+
 function updateEnemyAI(enemy, dt) {
   if (!enemy.alive) {
     enemy.respawnTimer--;
     if (enemy.respawnTimer <= 0) {
       enemy.alive = true;
-      enemy.balloons = 2;
+      enemy.balloons = enemy.color === '#4a4' ? 3 : (enemy.aiLevel >= 3 ? 3 : 2);
+      enemy.maxBalloons = enemy.balloons;
       enemy.groundedZeroTimer = 0;
-      enemy.x = 100 + Math.random() * 280;
-      enemy.y = 50 + Math.random() * 80;
+      enemy.inflatePhase = 0;
+      enemy.inflateTimer = 0;
+      // 固定复活点
+      switch (enemy.color) {
+        case '#f33': enemy.x = 230; enemy.y = 30; break;   // 红色：正中央上方
+        case '#f84': enemy.x = 60; enemy.y = 210; break;   // 橙色：左侧
+        case '#4a4': enemy.x = 350; enemy.y = 210; break;  // 绿色：右侧
+        case '#48f': enemy.x = 240; enemy.y = 260; break;  // 蓝色：中间平台
+        default: enemy.x = 240; enemy.y = 150;
+      }
       enemy.vx = 0;
       enemy.vy = 0;
+      enemy.invincible = 60; // 重生后短暂无敌
     }
     return;
   }
 
-  // ── 0 气球 + 在地面 → 只能走路，1.5秒后自动死亡重生 ──
+  // ── 0 气球：地面行走 → 等待 → 充气 → 飞起 ──
   if (enemy.balloons <= 0) {
     if (enemy.onGround) {
       enemy.groundedZeroTimer += dt;
-      if (enemy.groundedZeroTimer >= 1500) {
-        enemy.alive = false;
-        enemy.respawnTimer = 60;
-        spawnPopParticles(enemy.x + 10, enemy.y, '#f00');
-        playSound('pop');
+
+      // 充气阶段：正在膨胀气球
+      if (enemy.inflatePhase === 1) {
+        enemy.inflateTimer += dt;
+        enemy.vx *= 0.9;
+        if (enemy.inflateTimer >= 400) { // 从 500 缩短到 400，恢复更快
+          enemy.inflatePhase = 0;
+          enemy.inflateTimer = 0;
+          enemy.groundedZeroTimer = 0;
+          enemy.balloons = 1;
+        }
         return;
       }
-      const dx = player.x - enemy.x;
-      enemy.targetVx = Math.sign(dx) * 0.8;
-      enemy.vx += (enemy.targetVx - enemy.vx) * 0.05;
+
+      // 等待阶段：0.8秒后开始充气（从 1.5s 缩短）
+      if (enemy.groundedZeroTimer >= 800) {
+        enemy.inflatePhase = 1;
+        enemy.inflateTimer = 0;
+        return;
+      }
+
+      // 地面行走：向最近平台方向移动（确保不在危险位置）
+      const targetPlat = findBestPlatform(enemy);
+      if (targetPlat) {
+        navigateToPlatform(enemy, targetPlat);
+      } else {
+        // 没有合适平台，向玩家方向缓慢移动
+        if (enemy.thinkTimer-- <= 0) {
+          enemy.thinkTimer = 20 + Math.random() * 30;
+          const dx = player.x - enemy.x;
+          enemy.targetVx = Math.sign(dx) * 1.0;
+        }
+      }
+      enemy.vx += (enemy.targetVx - enemy.vx) * 0.08;
     }
     // 掉到水面附近也直接死
     if (enemy.y + enemy.h > WATER_Y - 10) {
@@ -806,44 +961,58 @@ function updateEnemyAI(enemy, dt) {
     return;
   }
 
-  // ── 正常 AI（有气球）──
-  enemy.groundedZeroTimer = 0;
+  // ── 正常 AI（有气球）：追击玩家 + 主动回平台 ──
+
+  const dx = player.x - enemy.x;
+  const dy = player.y - enemy.y;
 
   enemy.thinkTimer--;
   if (enemy.thinkTimer <= 0) {
-    enemy.thinkTimer = 30 + Math.random() * 60;
-    const dx = player.x - enemy.x;
-    const dy = player.y - enemy.y;
-    if (enemy.aiLevel >= 3) {
-      // 暴躁：疯狂追击，不停顿
-      enemy.targetVx = Math.sign(dx) * 2.5;
-      // 总是尝试飞到玩家高度
-      if (dy < -10) enemy.flapTimer = 0;
-      enemy.thinkTimer = 10 + Math.random() * 10; // 反应极快
-    } else if (enemy.aiLevel >= 2) {
-      enemy.targetVx = Math.sign(dx) * (1 + enemy.aiLevel * 0.5);
-      if (dy < -30) enemy.flapTimer = 0;
+    enemy.thinkTimer = 15 + Math.random() * 30;
+
+    // 如果在低处（y > 200），优先飞向高平台
+    if (enemy.y > 200) {
+      const targetPlat = findBestPlatform(enemy);
+      if (targetPlat) {
+        navigateToPlatform(enemy, targetPlat);
+      } else {
+        enemy.targetVx = Math.sign(dx) * 1.5;
+        if (dy < -30) enemy.flapTimer = 0;
+      }
     } else {
-      if (Math.random() < 0.6) {
+      // 在高处：向玩家追击
+      if (enemy.aiLevel >= 3) {
+        // 红色暴躁：疯狂追击
+        enemy.targetVx = Math.sign(dx) * 2.5;
+        if (dy < -10) enemy.flapTimer = 0;
+        enemy.thinkTimer = 8 + Math.random() * 8;
+      } else if (enemy.aiLevel >= 2) {
+        // 橙色/蓝色：中等追击
+        enemy.targetVx = Math.sign(dx) * (1.5 + enemy.aiLevel * 0.4);
+        if (dy < -30) enemy.flapTimer = 0;
+      } else {
+        // 绿色：缓慢追击
         enemy.targetVx = Math.sign(dx) * 1.2;
         if (dy < -40) enemy.flapTimer = 0;
-      } else {
-        enemy.targetVx = (Math.random() - 0.5) * 2;
       }
     }
   }
 
-  enemy.vx += (enemy.targetVx - enemy.vx) * 0.05;
+  enemy.vx += (enemy.targetVx - enemy.vx) * 0.06;
 
+  // 拍翅膀：低处更频繁
   enemy.flapTimer--;
   if (enemy.flapTimer <= 0) {
     let flapInterval;
-    if (enemy.aiLevel >= 3) {
-      flapInterval = 8 + Math.random() * 8; // 暴躁：疯狂拍
+    if (enemy.y > 200) {
+      // 在低处：频繁拍翅膀，尽快飞上去
+      flapInterval = 6 + Math.random() * 6;
+    } else if (enemy.aiLevel >= 3) {
+      flapInterval = 8 + Math.random() * 8;
     } else if (enemy.balloons >= 2) {
-      flapInterval = 40 + Math.random() * 30;
+      flapInterval = 30 + Math.random() * 20;
     } else {
-      flapInterval = 20 + Math.random() * 20;
+      flapInterval = 15 + Math.random() * 15;
     }
     enemy.flapTimer = flapInterval;
     doFlap(enemy);
@@ -899,10 +1068,11 @@ function drawPlatforms() {
   }
 }
 
-function drawBalloon(x, y, color, bobOffset) {
+function drawBalloon(x, y, color, bobOffset, balloonScale) {
+  const s = balloonScale || 1;
   const bx = x * scale;
   const by = (y + bobOffset) * scale;
-  const r = 6 * scale;
+  const r = 6 * scale * s;
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.ellipse(bx, by, r, r * 1.2, 0, 0, Math.PI * 2);
@@ -938,6 +1108,14 @@ function drawCharacter(entity) {
   const balloonY = y - 14 * es;
   const bob = Math.sin(Date.now() * 0.004 + entity.x) * 2;
   const bColor = isPlayer ? '#4bf' : entity.color;
+
+  // 充气动画：正在膨胀一个新气球
+  if (!isPlayer && entity.inflatePhase === 1) {
+    const progress = Math.min(entity.inflateTimer / 500, 1);
+    const bs = 0.2 + progress * 0.8; // 从 0.2 缩放到 1.0
+    const inflateBob = Math.sin(Date.now() * 0.008) * 1;
+    drawBalloon(x + 10 * es, y - 8 * es, bColor, inflateBob, bs);
+  }
 
   if (entity.balloons >= 3) {
     drawBalloon(x + 2 * es, balloonY, bColor, bob);
@@ -1070,8 +1248,9 @@ function updateRespawn(dt) {
     player.vx = 0;
     player.vy = 0;
     player.invincible = 120;
-    player.x = 80 + Math.random() * 320;
-    player.y = 30 + Math.random() * 40;
+    // 复活在中间大平台上方
+    player.x = 220 + Math.random() * 40;
+    player.y = 260;
     player.rechargeTimer = 0;
     player.flapCooldown = 0;
     player.stompChain = 0;
