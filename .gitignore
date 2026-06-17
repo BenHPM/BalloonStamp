@@ -1,0 +1,6 @@
+.vercel
+node_modules/
+verification/*.png
+verification/screenshots/
+verification/reports/*.json
+verification/reports/*.html
