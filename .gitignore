@@ -1,5 +1,6 @@
 .vercel
 node_modules/
+dist/
 verification/*.png
 verification/screenshots/
 verification/reports/*.json
