@@ -1,25 +1,17 @@
 {
   "name": "balloonstamp",
   "version": "2.0.0",
-  "description": "气球大乱踩 — Balloon Fight inspired game",
+  "description": "气球大乱踩 — .io 风格大地图淘汰赛",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/BenHPM/balloon-stamp-web.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/BenHPM/balloon-stamp-web/issues"
-  },
-  "homepage": "https://github.com/BenHPM/balloon-stamp-web.git#readme",
   "devDependencies": {
-    "vite": "^8.1.0"
+    "vite": "^8.1.0",
+    "vitest": "^3.0.0"
   }
 }
