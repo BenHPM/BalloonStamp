@@ -5,3 +5,4 @@ verification/*.png
 verification/screenshots/
 verification/reports/*.json
 verification/reports/*.html
+archive/
