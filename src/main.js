@@ -2,40 +2,39 @@
 import { GameEngine } from './engine/GameEngine.js'
 import { Renderer } from './engine/Renderer.js'
 import { PhysicsEngine } from './engine/PhysicsEngine.js'
-import { Player } from './entities/Player.js'
-import { PLATFORMS, PLAYER_CONFIG } from './config/entities.js'
+import { MenuState } from './states/MenuState.js'
+import { PlayState } from './states/PlayState.js'
+import { ResultState } from './states/ResultState.js'
+import { PLATFORMS } from './config/entities.js'
 
 const canvas = document.getElementById('game-canvas')
 const engine = new GameEngine(canvas)
-const renderer = new Renderer()
-const physics = new PhysicsEngine()
-physics.setPlatforms(PLATFORMS)
-renderer.entityRenderer.prerenderEntity(PLAYER_CONFIG.color, PLAYER_CONFIG.balloonColor)
+engine.renderer = new Renderer()
+engine.physics = new PhysicsEngine()
+engine.physics.setPlatforms(PLATFORMS)
 
-const player = new Player()
-player.x = PLAYER_CONFIG.spawnX
-player.y = PLAYER_CONFIG.spawnY
+function startGame() {
+  const playState = new PlayState()
+  playState.engineRef = engine
+  playState.showResult = showResult
+  engine.setState(playState)
+}
 
-let totalTime = 0
-engine.setState({
-  enter(engine) { engine.handleResize() },
-  fixedUpdate(dt) {
-    engine.input.update()
-    totalTime += dt
-    if (player.alive) {
-      physics.update(player, engine.input.state, dt)
-      player.tick(dt, engine.input.state)
-    }
-    renderer.update(dt)
-    engine.camera.follow(player.x + player.width / 2, player.y + player.height / 2)
-  },
-  render(ctx, camera) {
-    renderer.render(ctx, camera, {
-      player, enemies: [], aliveCount: 1, totalTime,
-    })
-  }
-})
+function showResult(data) {
+  const resultState = new ResultState(data)
+  resultState.engineRef = engine
+  resultState.restart = showMenu
+  engine.setState(resultState)
+}
+
+function showMenu() {
+  const menuState = new MenuState()
+  menuState.engineRef = engine
+  menuState.startGame = startGame
+  engine.setState(menuState)
+}
 
 window.addEventListener('resize', () => engine.handleResize())
 engine.handleResize()
+showMenu()
 engine.start()
