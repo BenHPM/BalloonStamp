@@ -9,8 +9,8 @@ describe('PhysicsEngine', () => {
     const entity = { x: 100, y: 100, vx: 0, vy: 0, balloons: 2, width: 20, height: 30, onGround: false }
     phys.update(entity, { moveX: 0, flapJustPressed: false }, 1/60)
     expect(entity.vy).toBeGreaterThan(0) // 下落
-    // 2 气球重力 = 1000
-    expect(entity.vy).toBeCloseTo(1000 / 60, 1)
+    // 2 气球重力 = 720
+    expect(entity.vy).toBeCloseTo(720 / 60, 1)
   })
 
   it('flap sets upward velocity', () => {

@@ -2,29 +2,49 @@
 // 所有数值以"世界单位/秒"定义，固定步长 dt=1/60s 应用
 export const PHYS = {
   // 重力（按气球数索引：0最重，5最轻）
-  gravity: [1400, 1200, 1000, 850, 750, 650], // px/s²，索引 0-5 对应气球数
-  // 拍打冲量（按气球数索引，0时无法拍打）
-  flapImpulse: [0, -280, -310, -330, -350, -370], // px/s — 拍打冲量适度，气球越多越高
-  flapCooldown: 0.35, // 秒 — 拍打节奏感，不能疯狂连拍
+  gravity: [1050, 880, 720, 620, 520, 420],
+  // 拍打冲量
+  flapImpulse: [0, -380, -420, -450, -480, -510],
+  flapCooldown: 0.35,
   // 水平移动
-  moveAccel: 1800, // px/s²
-  maxMoveSpeed: 280, // px/s
-  horizontalFriction: 0.92, // 每步衰减系数
+  moveAccel: 2000,
+  maxMoveSpeed: 280,
+  coastFriction: 0.985,
+  moveDeadZone: 0.05,
   // 终速
-  terminalVelocityDown: 500, // px/s
-  terminalVelocityUp: 600, // px/s
+  terminalVelocityDown: 500,
+  terminalVelocityUp: 600,
   // 踩踏弹跳
-  stompBounceFactor: 0.8, // 弹跳 = 当前flapImpulse × factor
+  stompBounceFactor: 0.8,
   // 气球
   maxBalloons: 5,
   initialBalloons: 2,
-  // 成长（每多1个气球超过初始值）
-  sizePerBalloon: 0.03, // +3%
-  speedPerBalloon: 0.02, // +2%
+  sizePerBalloon: 0.03,
+  speedPerBalloon: 0.02,
   // 0气球恢复
-  inflateStillTime: 2.0, // 静止秒数触发充气
-  inflateDuration: 1.5, // 充气动画秒数
-  inflateRecoverTo: 1, // 恢复到几个气球
+  inflateStillTime: 2.0,
+  inflateDuration: 1.5,
+  inflateRecoverTo: 1,
+  // 反馈动画
+  landSquashDuration: 0.12,
+  shockwaveDuration: 0.25,
+  invincibleDuration: 3.0,
+  // 踩踏判定
+  stompOverlapDepth: 5,
+  stompParticleCount: 12,
+  // 平台碰撞容差
+  platformTolerance: 0,
+  // 击中判定容差
+  hitTolerance: 6,
+  lightningParticleCount: 15,
+  whaleParticleCount: 15,
+  // 动画
+  animFrameDuration: 0.1,
+  // 输入
+  inputDeadZone: 0.1,
+  stillThreshold: 20,
   // 侧面弹开
-  bounceForce: 200, // px/s
+  bounceForce: 200,
+  // 击晕（侧面碰撞硬直）
+  stunDuration: 0.3, // 秒
 }

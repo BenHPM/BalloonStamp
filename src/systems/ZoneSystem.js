@@ -8,6 +8,15 @@ export class ZoneSystem {
     this.zoneCenterY = WORLD.height / 2
     this.elapsed = 0
     this.shrinkTimer = 0
+    this._entityZoneTimers = new Map() // entity → seconds outside zone
+  }
+
+  resetEntityTimer(entity) {
+    this._entityZoneTimers.set(entity, 0)
+  }
+
+  removeEntity(entity) {
+    this._entityZoneTimers.delete(entity)
   }
 
   update(dt, aliveCount) {
@@ -20,7 +29,6 @@ export class ZoneSystem {
     }
   }
 
-  // 检查实体是否在圈外
   isOutsideZone(entity) {
     const cx = entity.x + entity.width / 2
     const cy = entity.y + entity.height / 2
@@ -28,7 +36,6 @@ export class ZoneSystem {
     return dist > this.zoneRadius
   }
 
-  // 对圈外实体施加推力
   applyZoneForce(entity, dt) {
     if (!this.isOutsideZone(entity)) return
     const cx = entity.x + entity.width / 2
@@ -38,5 +45,33 @@ export class ZoneSystem {
     const dist = Math.hypot(dx, dy) || 1
     entity.vx += (dx / dist) * WORLD.zonePushForce * dt
     entity.vy += (dy / dist) * WORLD.zonePushForce * dt
+  }
+
+  // 获取实体在圈外的时间（秒）
+  getOutsideTime(entity) {
+    return this._entityZoneTimers.get(entity) || 0
+  }
+
+  // 每帧调用，更新圈外时间并返回本帧应造成的伤害
+  tickEntity(entity, dt) {
+    const outside = this.isOutsideZone(entity)
+    if (outside) {
+      const prev = this._entityZoneTimers.get(entity) || 0
+      const current = prev + dt
+      this._entityZoneTimers.set(entity, current)
+      // 计算伤害等级
+      let dps = 0
+      const { zoneDamage, zoneDamageIntervals } = WORLD
+      for (let i = zoneDamageIntervals.length - 1; i >= 0; i--) {
+        if (current >= zoneDamageIntervals[i]) {
+          dps = zoneDamage[i + 1]
+          break
+        }
+      }
+      return { outside, outsideTime: current, damage: dps * dt, dps }
+    } else {
+      this._entityZoneTimers.set(entity, 0)
+      return { outside: false, outsideTime: 0, damage: 0, dps: 0 }
+    }
   }
 }

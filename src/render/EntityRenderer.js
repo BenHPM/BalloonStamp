@@ -26,8 +26,37 @@ export class EntityRenderer {
 
     ctx.save()
     ctx.translate(cx, cy)
-    if (flip) ctx.scale(-1, 1)
-    ctx.scale(scale, scale)
+
+    // Squash-and-stretch（落地压扁 + 速度拉伸）
+    let squashX = 1, squashY = 1
+    if (entity.landSquashTimer > 0) {
+      const t = entity.landSquashTimer / 0.12 // 0.12s 压扁动画
+      squashX = 1 + 0.3 * t
+      squashY = 1 - 0.3 * t
+    } else {
+      // 速度驱动拉伸（下落时拉伸，上升时压缩）
+      const speedFactor = Math.abs(entity.vy) * 0.00025
+      squashX = 1 + Math.min(speedFactor, 0.15)
+      squashY = 1 - Math.min(speedFactor, 0.15)
+    }
+
+    const sx = (flip ? -1 : 1) * squashX * scale
+    const sy = squashY * scale
+    ctx.scale(sx, sy)
+
+    // 冲击波
+    if (entity.shockwaveTimer > 0) {
+      const swProgress = 1 - entity.shockwaveTimer / 0.25
+      const swRadius = swProgress * 40
+      const swAlpha = (1 - swProgress) * 0.5
+      ctx.globalAlpha = swAlpha
+      ctx.strokeStyle = entity.balloonColor || '#4DA6FF'
+      ctx.lineWidth = 3 * (1 - swProgress)
+      ctx.beginPath()
+      ctx.arc(0, 0, swRadius, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
 
     // === 气球（先画，在角色上方） ===
     if (balloons > 0 && animName !== 'electrocute') {
@@ -70,17 +99,11 @@ export class EntityRenderer {
     ctx.fill()
     ctx.stroke()
 
-    // 眼睛
-    ctx.fillStyle = '#fff'
-    ctx.beginPath()
-    ctx.arc(3, -11, 3, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = '#000'
-    ctx.beginPath()
-    ctx.arc(4, -11, 1.5, 0, Math.PI * 2)
-    ctx.fill()
+    // 眼睛 + 嘴巴（按状态变化）
+    this._drawFace(ctx, bodyColor, animName, entity)
 
-    // === 动画细节 ===
+    // === 动画细节（手脚） ===
+
     if (animName === 'flap') {
       // 手臂上扬
       ctx.fillStyle = bodyColor
@@ -92,16 +115,6 @@ export class EntityRenderer {
       const offset = animFrame % 2 === 0 ? 2 : -2
       ctx.fillRect(-6, 20, 4, 6)
       ctx.fillRect(2, 20, 4, 6 + offset)
-    } else if (animName === 'fall') {
-      // 坠落：手臂上举求救
-      ctx.fillStyle = bodyColor
-      ctx.fillRect(-15, -8, 6, 4)
-      ctx.fillRect(9, -8, 6, 4)
-      // 惊恐表情
-      ctx.fillStyle = '#000'
-      ctx.beginPath()
-      ctx.arc(3, -9, 2, 0, Math.PI * 2)
-      ctx.fill()
     } else if (animName === 'electrocute') {
       // 电弧效果
       ctx.strokeStyle = '#FFFF00'
@@ -124,6 +137,119 @@ export class EntityRenderer {
     ctx.restore()
   }
 
+  // ─── 表情系统 ───────────────────────────────────────────
+
+  _drawFace(ctx, bodyColor, animName, entity) {
+    const state = entity.state
+    const isInvincible = entity.invincibleTimer > 0 && Math.floor(entity.invincibleTimer * 15) % 2 === 0
+
+    if (isInvincible) return // 无敌闪烁：省略五官
+
+    if (animName === 'electrocute') {
+      this._drawXEyes(ctx)
+      this._drawMouth(ctx, 'o')
+      return
+    }
+
+    if (state === 'inflating' || animName === 'inflate') {
+      this._drawHappyEyes(ctx)
+      this._drawMouth(ctx, 'o')
+      return
+    }
+
+    if (state === 'grounded') {
+      this._drawTiredEyes(ctx)
+      this._drawMouth(ctx, 'yawn')
+      return
+    }
+
+    if (animName === 'fall') {
+      this._drawWideEyes(ctx)
+      this._drawMouth(ctx, 'o')
+      return
+    }
+
+    // 默认
+    this._drawNormalEyes(ctx)
+    this._drawMouth(ctx, animName === 'flap' ? 'open' : 'smile')
+  }
+
+  _drawNormalEyes(ctx) {
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(3, -11, 3, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#000'
+    ctx.beginPath()
+    ctx.arc(4, -11, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  _drawHappyEyes(ctx) {
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(4, -11, 2, Math.PI, 0)
+    ctx.stroke()
+  }
+
+  _drawTiredEyes(ctx) {
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(3, -11, 2.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#000'
+    ctx.fillRect(1.5, -12, 3, 1.5)
+  }
+
+  _drawWideEyes(ctx) {
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(3, -11, 3.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#000'
+    ctx.beginPath()
+    ctx.arc(4, -11, 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(5, -12, 0.7, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  _drawXEyes(ctx) {
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(1, -13); ctx.lineTo(5, -9)
+    ctx.moveTo(5, -13); ctx.lineTo(1, -9)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(7, -13); ctx.lineTo(11, -9)
+    ctx.moveTo(11, -13); ctx.lineTo(7, -9)
+    ctx.stroke()
+  }
+
+  _drawMouth(ctx, type) {
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1.2
+    ctx.beginPath()
+    if (type === 'smile') {
+      ctx.arc(6, -6, 2.5, 0.2, Math.PI - 0.2)
+    } else if (type === 'open') {
+      ctx.arc(6, -6, 2, 0, Math.PI)
+      ctx.fillStyle = '#000'
+      ctx.fill()
+    } else if (type === 'o') {
+      ctx.arc(6, -6, 1.5, 0, Math.PI * 2)
+      ctx.fillStyle = '#000'
+      ctx.fill()
+    } else if (type === 'yawn') {
+      ctx.ellipse(6, -5, 2, 3, 0, 0, Math.PI)
+    }
+    ctx.stroke()
+  }
+
   // 计算第 i 个气球的 X 偏移
   _balloonX(i, total) {
     if (total === 1) return 0
@@ -144,31 +270,50 @@ export class EntityRenderer {
     return baseY + rowOffset + float
   }
 
-  // 绘制气球簇
+  // 绘制气球簇（径向渐变 + 高光 + 阴影）
   _drawBalloons(ctx, count, color, animName, animFrame, progress = 1) {
     for (let i = 0; i < count; i++) {
       const bx = this._balloonX(i, count)
       const by = this._balloonY(i, count, animFrame)
-      const r = 9 * progress // 气球半径
+      const r = 9 * progress
 
       ctx.save()
       ctx.globalAlpha = progress
 
-      // 气球主体
-      ctx.fillStyle = color
+      // 气球投影（微暗椭圆在底部）
+      ctx.fillStyle = 'rgba(0,0,0,0.08)'
+      ctx.beginPath()
+      ctx.ellipse(bx, by + r + 2, r * 0.7, r * 0.2, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // 气球主体 — 径向渐变（左上光源）
+      const grad = ctx.createRadialGradient(
+        bx - r * 0.3, by - r * 0.3, r * 0.1,
+        bx, by, r
+      )
+      grad.addColorStop(0, this._lightenColor(color, 40))
+      grad.addColorStop(0.5, color)
+      grad.addColorStop(1, this._darkenColor(color, 40))
+      ctx.fillStyle = grad
       ctx.beginPath()
       ctx.arc(bx, by, r, 0, Math.PI * 2)
       ctx.fill()
 
       // 描边
-      ctx.strokeStyle = 'rgba(0,0,0,0.15)'
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)'
       ctx.lineWidth = 1
       ctx.stroke()
 
-      // 高光
-      ctx.fillStyle = VISUALS.balloonHighlight
+      // 高光弧（顶部新月）
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'
       ctx.beginPath()
-      ctx.arc(bx - r * 0.3, by - r * 0.3, r * 0.35, 0, Math.PI * 2)
+      ctx.ellipse(bx - r * 0.25, by - r * 0.3, r * 0.35, r * 0.2, -0.3, 0, Math.PI * 2)
+      ctx.fill()
+
+      // 镜面高光点
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'
+      ctx.beginPath()
+      ctx.arc(bx - r * 0.3, by - r * 0.35, r * 0.1, 0, Math.PI * 2)
       ctx.fill()
 
       // 气球底部小三角（扎口）
@@ -181,6 +326,24 @@ export class EntityRenderer {
 
       ctx.restore()
     }
+  }
+
+  // 颜色辅助：变亮
+  _lightenColor(hex, amount) {
+    const num = parseInt(hex.slice(1), 16)
+    const r = Math.min(255, (num >> 16) + amount)
+    const g = Math.min(255, ((num >> 8) & 0xff) + amount)
+    const b = Math.min(255, (num & 0xff) + amount)
+    return `rgb(${r},${g},${b})`
+  }
+
+  // 颜色辅助：变暗
+  _darkenColor(hex, amount) {
+    const num = parseInt(hex.slice(1), 16)
+    const r = Math.max(0, (num >> 16) - amount)
+    const g = Math.max(0, ((num >> 8) & 0xff) - amount)
+    const b = Math.max(0, (num & 0xff) - amount)
+    return `rgb(${r},${g},${b})`
   }
 
   renderPlatform(ctx, plat) {
@@ -209,6 +372,17 @@ export class EntityRenderer {
     ctx.fillStyle = 'rgba(255,255,255,0.6)'
     ctx.beginPath()
     ctx.ellipse(cx, cy - 4, plat.w * 0.25, plat.h * 0.3, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    // 草地层（底部绿边）
+    ctx.fillStyle = '#7EC850'
+    ctx.beginPath()
+    ctx.ellipse(cx, plat.y + plat.h / 2, plat.w / 2 + 2, 5, 0, Math.PI, 0)
+    ctx.fill()
+    // 草地高光
+    ctx.fillStyle = '#A4D65E'
+    ctx.beginPath()
+    ctx.ellipse(cx, plat.y + plat.h / 2 - 1, plat.w / 2, 3, 0, Math.PI, 0)
     ctx.fill()
   }
 }

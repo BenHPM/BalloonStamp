@@ -26,10 +26,7 @@ export class MatchManager {
     entity.eliminate()
     this.aliveEntities = this.aliveEntities.filter(e => e !== entity)
     this.eliminated.push(entity)
-    if (this.aliveEntities.length <= 1) {
-      this.phase = 'ended'
-      this.winner = this.aliveEntities[0] || null
-    }
+    // 不再自动结束 — 由 PlayState 的玩家生命系统控制
   }
 
   update(dt) {

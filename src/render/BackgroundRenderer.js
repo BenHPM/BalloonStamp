@@ -1,10 +1,13 @@
 // src/render/BackgroundRenderer.js
 import { WORLD } from '../config/world.js'
 import { VISUALS } from '../config/visuals.js'
+import { AirCurrentParticles } from './AirCurrentRenderer.js'
 
 export class BackgroundRenderer {
   constructor() {
-    // 预生成云朵装饰
+    this._cloudCache = new Map()
+    this._cacheClouds()
+    // 实例化云层数据
     this.clouds = []
     for (let i = 0; i < VISUALS.cloudCount; i++) {
       this.clouds.push({
@@ -13,9 +16,53 @@ export class BackgroundRenderer {
         size: 30 + Math.random() * 40,
         speed: 5 + Math.random() * 10,
         alpha: 0.3 + Math.random() * 0.4,
+        // 从缓存分配一个变体
+        variant: Math.floor(Math.random() * 3),
       })
     }
     this.time = 0
+  }
+
+  _cacheClouds() {
+    // 为 3 种尺寸变体各预渲染一个云朵精灵
+    for (let v = 0; v < 3; v++) {
+      const baseSize = 35 + v * 10
+      const padding = baseSize * 0.8
+      const canvasSize = Math.ceil(baseSize + padding * 2)
+      const off = document.createElement('canvas')
+      off.width = canvasSize
+      off.height = canvasSize
+      const ctx = off.getContext('2d')
+      const cx = canvasSize / 2
+      const cy = canvasSize / 2
+      this._drawCloudShape(ctx, cx, cy, baseSize, v)
+      this._cloudCache.set(v, { canvas: off, size: canvasSize })
+    }
+  }
+
+  // 云朵造型（3 种变体）
+  _drawCloudShape(ctx, cx, cy, size, variant) {
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    // 变体 0：标准蓬松
+    // 变体 1：更圆润（大圆叠加）
+    // 变体 2：扁长形
+    if (variant === 0) {
+      ctx.arc(cx, cy, size * 0.5, 0, Math.PI * 2)
+      ctx.arc(cx + size * 0.4, cy - size * 0.1, size * 0.4, 0, Math.PI * 2)
+      ctx.arc(cx + size * 0.7, cy, size * 0.45, 0, Math.PI * 2)
+      ctx.arc(cx + size * 0.3, cy + size * 0.15, size * 0.35, 0, Math.PI * 2)
+    } else if (variant === 1) {
+      ctx.arc(cx, cy, size * 0.55, 0, Math.PI * 2)
+      ctx.arc(cx + size * 0.35, cy - size * 0.15, size * 0.45, 0, Math.PI * 2)
+      ctx.arc(cx - size * 0.3, cy + size * 0.05, size * 0.4, 0, Math.PI * 2)
+    } else {
+      ctx.arc(cx, cy, size * 0.4, 0, Math.PI * 2)
+      ctx.arc(cx + size * 0.25, cy - size * 0.05, size * 0.35, 0, Math.PI * 2)
+      ctx.arc(cx + size * 0.5, cy + size * 0.05, size * 0.3, 0, Math.PI * 2)
+      ctx.arc(cx + size * 0.1, cy + size * 0.1, size * 0.3, 0, Math.PI * 2)
+    }
+    ctx.fill()
   }
 
   update(dt) {
@@ -41,10 +88,20 @@ export class BackgroundRenderer {
     ctx.save()
     ctx.translate(-camera.x, -camera.y)
 
-    // 远景云层（视差 0.3）
+    // 远景云层（使用缓存精灵）
     this.clouds.forEach(c => {
       ctx.globalAlpha = c.alpha
-      this._drawCloud(ctx, c.x, c.y, c.size)
+      const cached = this._cloudCache.get(c.variant)
+      if (cached) {
+        const s = c.size / 35 // 归一化到基础尺寸
+        const drawSize = cached.size * s
+        ctx.drawImage(
+          cached.canvas,
+          c.x - drawSize / 2,
+          c.y - drawSize / 2,
+          drawSize, drawSize
+        )
+      }
     })
     ctx.globalAlpha = 1
 
@@ -68,15 +125,5 @@ export class BackgroundRenderer {
     ctx.strokeRect(0, 0, WORLD.width, WORLD.height)
 
     ctx.restore()
-  }
-
-  _drawCloud(ctx, x, y, size) {
-    ctx.fillStyle = '#fff'
-    ctx.beginPath()
-    ctx.arc(x, y, size * 0.5, 0, Math.PI * 2)
-    ctx.arc(x + size * 0.4, y - size * 0.1, size * 0.4, 0, Math.PI * 2)
-    ctx.arc(x + size * 0.7, y, size * 0.45, 0, Math.PI * 2)
-    ctx.arc(x + size * 0.3, y + size * 0.15, size * 0.35, 0, Math.PI * 2)
-    ctx.fill()
   }
 }

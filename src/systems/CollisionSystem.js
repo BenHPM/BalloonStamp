@@ -18,8 +18,10 @@ export class CollisionSystem {
     }
 
     // 判断谁从上方踩踏
-    const aFromAbove = a.vy > 0 && (a.y + a.height * 0.5) < (b.y + b.height * 0.5)
-    const bFromAbove = b.vy > 0 && (b.y + b.height * 0.5) < (a.y + a.height * 0.5)
+    const aFromAbove = a.vy > 0 && (a.y + a.height * 0.5) < (b.y + b.height * 0.5) &&
+      (a.y + a.height) - b.y > PHYS.stompOverlapDepth
+    const bFromAbove = b.vy > 0 && (b.y + b.height * 0.5) < (a.y + a.height * 0.5) &&
+      (b.y + b.height) - a.y > PHYS.stompOverlapDepth
 
     if (aFromAbove && !bFromAbove && a.balloons > 0 && b.balloons > 0) {
       return { type: 'stomp', attacker: a, victim: b }
@@ -57,7 +59,7 @@ export class CollisionSystem {
 
     // 粒子
     if (particleSystem) {
-      particleSystem.burst(victim.x + victim.width / 2, victim.y, '#fff', 8)
+      particleSystem.burst(victim.x + victim.width / 2, victim.y, '#fff', PHYS.stompParticleCount)
     }
 
     return events
@@ -68,6 +70,9 @@ export class CollisionSystem {
     const dirA = a.x < b.x ? -1 : 1
     physicsEngine.applyBounce(a, dirA)
     physicsEngine.applyBounce(b, -dirA)
+    // 击晕：双方短暂硬直
+    a.stunTimer = PHYS.stunDuration
+    b.stunTimer = PHYS.stunDuration
     return [{ type: 'bounce', a, b }]
   }
 }

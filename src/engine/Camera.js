@@ -7,16 +7,17 @@ export class Camera {
     this.viewHeight = viewHeight
     this.x = 0
     this.y = 0
-    this.lerp = 0.1
+    this.lerpX = 0.10
+    this.lerpY = 0.16 // Y轴更快跟随，因为上下移动更剧烈
     // 玩家偏下：屏幕 2/3 处
     this.verticalOffset = viewHeight * (1 / 3)
   }
 
-  follow(targetX, targetY) {
+  follow(targetX, targetY, dt = 1 / 60) {
     const targetCamX = targetX - this.viewWidth / 2
     const targetCamY = targetY - this.viewHeight * 2 / 3 // 玩家在偏下位置
-    this.x += (targetCamX - this.x) * this.lerp
-    this.y += (targetCamY - this.y) * this.lerp
+    this.x += (targetCamX - this.x) * (1 - Math.pow(1 - this.lerpX, dt * 60))
+    this.y += (targetCamY - this.y) * (1 - Math.pow(1 - this.lerpY, dt * 60))
     this._clamp()
   }
 

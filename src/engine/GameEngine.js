@@ -12,22 +12,23 @@ export class GameEngine {
     this.camera = new Camera(WORLD.width, WORLD.height, WORLD.viewPortrait.w, WORLD.viewPortrait.h)
     this.input = new InputManager(canvas)
     this.spatialGrid = new SpatialGrid(WORLD.width, WORLD.height, WORLD.cellSize)
-    this.running = false
-    this.lastTime = 0
-    this.accumulator = 0
-    this.fixedStep = 1 / 60 // 秒
-    this.state = null // 当前游戏状态对象
-    this.entityManager = null // 由 PlayState 设置
-    this.renderer = null // 由 main.js 设置
-    this.physics = null // 由 main.js 设置
+    this.state = null
+    this.renderer = null
+    this.physics = null
     this._renderScale = 1
     this._screenOffsetX = 0
     this._screenOffsetY = 0
+    this.lastTime = 0
+    this.accumulator = 0
+    this.fixedStep = 1 / 60
+    this.running = false
   }
 
   setState(state) {
     if (this.state && this.state.exit) this.state.exit(this)
     this.state = state
+    this.accumulator = 0 // 重置累加器，防止旧状态积攒的时间导致新状态首帧跳跃
+    state.engineRef = this
     if (state.enter) state.enter(this)
   }
 
@@ -61,14 +62,14 @@ export class GameEngine {
   }
 
   handleResize() {
-    const dpr = window.devicePixelRatio || 1
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const w = window.innerWidth
     const h = window.innerHeight
     this.canvas.width = w * dpr
     this.canvas.height = h * dpr
     this.canvas.style.width = w + 'px'
     this.canvas.style.height = h + 'px'
-    this.ctx.scale(dpr, dpr)
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     // 横竖屏
     const isLandscape = w > h
     const view = isLandscape ? WORLD.viewLandscape : WORLD.viewPortrait

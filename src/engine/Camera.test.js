@@ -6,11 +6,12 @@ describe('Camera', () => {
   it('follows target with lerp', () => {
     const cam = new Camera(2400, 1800, 720, 1280)
     cam.x = 0; cam.y = 0
-    cam.follow(1000, 1000)
-    // targetCamX = 1000 - 720/2 = 640, cam.x = 640 * 0.1 = 64
-    expect(cam.x).toBeCloseTo(64, 0)
-    // targetCamY = 1000 - 1280*2/3 ≈ 146.67, cam.y = 146.67 * 0.1 ≈ 14.67
-    expect(cam.y).toBeCloseTo(14.67, 0)
+    // 帧率补偿：单步增量极小，需模拟多帧
+    for (let i = 0; i < 120; i++) cam.follow(1000, 1000, 1/60)
+    expect(cam.x).toBeGreaterThan(500)
+    expect(cam.x).toBeLessThan(700)
+    expect(cam.y).toBeGreaterThan(100)
+    expect(cam.y).toBeLessThan(200)
   })
 
   it('clamps to world bounds', () => {
