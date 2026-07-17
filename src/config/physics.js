@@ -3,13 +3,14 @@
 export const PHYS = {
   // 重力（按气球数索引：0最重，5最轻）
   gravity: [1050, 880, 720, 620, 520, 420],
-  // 拍打冲量
-  flapImpulse: [0, -380, -420, -450, -480, -510],
-  flapCooldown: 0.35,
+  // 拍打冲量（负值=向上；比之前降低约 30%，让拍打更柔和）
+  flapImpulse: [0, -260, -290, -310, -330, -350],
+  flapCooldown: 0.5,
   // 水平移动
   moveAccel: 2000,
   maxMoveSpeed: 280,
-  coastFriction: 0.985,
+  coastFriction: 0.96, // 无输入时的速度衰减（每帧乘以该值；0.96 约 0.5 秒停住，止漂）
+  groundFriction: 0.88, // 地面额外摩擦（每帧乘以该值；更快速停止）
   moveDeadZone: 0.05,
   // 终速
   terminalVelocityDown: 500,

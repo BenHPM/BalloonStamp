@@ -29,17 +29,23 @@ export class PhysicsEngine {
       entity.vx += accel * dt
       // 有输入时不施加摩擦——加速度自然控制速度
     } else if (!isStunned) {
-      // 无输入：轻摩擦产生飘滑感
-      entity.vx *= PHYS.coastFriction
+      // 无输入：摩擦衰减
+      if (entity.onGround) {
+        // 地面：强摩擦快速停止
+        entity.vx *= PHYS.groundFriction
+      } else {
+        // 空中：轻摩擦产生飘滑感
+        entity.vx *= PHYS.coastFriction
+      }
     }
     // 被击晕时保持当前水平速度但不衰减（保留惯性）
     // 限速
     const maxSpeed = PHYS.maxMoveSpeed * (1 + Math.max(0, balloons - PHYS.initialBalloons) * PHYS.speedPerBalloon) * (entity.speed || 1)
     entity.vx = Math.max(-maxSpeed, Math.min(maxSpeed, entity.vx))
 
-    // 拍打
+    // 拍打：轻点一下拍一次，长按住 cooldown 结束后持续拍打
     entity.flapCooldown = Math.max(0, (entity.flapCooldown || 0) - dt)
-    if (!isStunned && input.flapJustPressed && balloons > 0 && entity.flapCooldown <= 0) {
+    if (!isStunned && input.flap && balloons > 0 && entity.flapCooldown <= 0) {
       entity.vy = PHYS.flapImpulse[balloons] || PHYS.flapImpulse[2]
       entity.flapCooldown = PHYS.flapCooldown
       entity.isFlapping = true
@@ -59,29 +65,12 @@ export class PhysicsEngine {
     const sdx = dx / steps
     const sdy = dy / steps
     entity.x += sdx
+    entity.onGround = false
     for (let s = 0; s < steps; s++) {
       entity.y += sdy
       if (entity.vy >= 0 && this._resolvePlatformCollision(entity, sdy)) {
         // 已着陆，停止后续子步的下落
         break
-      }
-    }
-
-    // 平台碰撞（仅下落时）
-    entity.onGround = false
-    if (entity.vy >= 0) {
-      const prevBottom = entity.y + entity.height - entity.vy * dt
-      const newBottom = entity.y + entity.height
-      for (const plat of this.platforms) {
-        if (entity.x + entity.width > plat.x && entity.x < plat.x + plat.w &&
-            prevBottom <= plat.y + PHYS.platformTolerance && newBottom >= plat.y) {
-          entity.y = plat.y - entity.height
-          entity.vy = 0
-          entity.onGround = true
-          entity.onPlatform = plat
-          if (!entity.landSquashTimer) entity.landSquashTimer = 0.12 // 落地压扁
-          break
-        }
       }
     }
 

@@ -41,14 +41,14 @@ export class Enemy extends BalloonEntity {
     const { allEnemies, lightningBolts, whale, zoneCenterX, zoneCenterY, zoneRadius, difficulty = {} } = context
 
     if (!this.alive || this.state === EntityState.INFLATING || this.state === EntityState.ELIMINATED) {
-      return { moveX: 0, flapJustPressed: false }
+      return { moveX: 0, flap: false }
     }
 
     this.aiTimer += dt
     if (this.aiTimer < this._decisionInterval) {
       // 决策间隔内不重算路径，但保底：危险高度仍会拍打避免直接坠入水中
-      const flapJustPressed = this.balloons > 0 && this._isInDangerAltitude()
-      return { moveX: this.moveDir, flapJustPressed }
+      const flap = this.balloons > 0 && this._isInDangerAltitude()
+      return { moveX: this.moveDir, flap }
     }
     this.aiTimer = 0
 
@@ -98,9 +98,9 @@ export class Enemy extends BalloonEntity {
     this.moveDir = cx > myX + 5 ? 1 : (cx < myX - 5 ? -1 : 0)
     // 被圈推向下时需频繁拍打维持高度
     if (this.balloons > 0 && this.y > cy && Math.random() < (0.5 * flapMult)) {
-      return { moveX: this.moveDir, flapJustPressed: true }
+      return { moveX: this.moveDir, flap: true }
     }
-    return { moveX: this.moveDir, flapJustPressed: false }
+    return { moveX: this.moveDir, flap: false }
   }
 
   _pickTarget(player, allEnemies, chaseRate) {
@@ -130,19 +130,19 @@ export class Enemy extends BalloonEntity {
       this.flapAiTimer -= flapMult
       if (this.flapAiTimer <= 0) {
         this.flapAiTimer = this.flapInterval[0] + Math.random() * (this.flapInterval[1] - this.flapInterval[0])
-        return { moveX: this.moveDir, flapJustPressed: true }
+        return { moveX: this.moveDir, flap: true }
       }
     }
-    return { moveX: this.moveDir, flapJustPressed: false }
+    return { moveX: this.moveDir, flap: false }
   }
 
   _dodgeMove(flapMult = 1) {
     const fleeDir = Math.random() < 0.5 ? -1 : 1
     this.moveDir = fleeDir
     if (this.balloons > 0 && Math.random() < (0.5 * flapMult)) {
-      return { moveX: fleeDir, flapJustPressed: true }
+      return { moveX: fleeDir, flap: true }
     }
-    return { moveX: fleeDir, flapJustPressed: false }
+    return { moveX: fleeDir, flap: false }
   }
 
   _shouldDodge(lightningBolts, whale) {
@@ -173,20 +173,20 @@ export class Enemy extends BalloonEntity {
       const targetX = bestPlat.x + bestPlat.w / 2
       this.moveDir = targetX > this.x + this.width / 2 ? 1 : (targetX < this.x ? -1 : 0)
       if (this.balloons > 0 && Math.random() < (0.6 * flapMult)) {
-        return { moveX: this.moveDir, flapJustPressed: true }
+        return { moveX: this.moveDir, flap: true }
       }
     }
-    return { moveX: this.moveDir, flapJustPressed: false }
+    return { moveX: this.moveDir, flap: false }
   }
 
   _roam() {
     if (Math.random() < 0.3) this.moveDir = Math.random() < 0.5 ? -1 : 1
     if (Math.random() < 0.15 && this.balloons > 0) {
-      return { moveX: this.moveDir, flapJustPressed: true }
+      return { moveX: this.moveDir, flap: true }
     }
     if (this.onGround && Math.abs(this.vx) < 10 && this.balloons > 0) {
-      return { moveX: this.moveDir, flapJustPressed: true }
+      return { moveX: this.moveDir, flap: true }
     }
-    return { moveX: this.moveDir, flapJustPressed: false }
+    return { moveX: this.moveDir, flap: false }
   }
 }
