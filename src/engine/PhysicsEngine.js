@@ -51,9 +51,21 @@ export class PhysicsEngine {
       if (entity.flapTimer <= 0) entity.isFlapping = false
     }
 
-    // 位置
-    entity.x += entity.vx * dt
-    entity.y += entity.vy * dt
+    // 位置（子步积分，避免高速下落穿透薄平台）
+    const dx = entity.vx * dt
+    const dy = entity.vy * dt
+    const stepLimit = Math.max(8, entity.height * 0.5)
+    const steps = Math.max(1, Math.ceil(Math.abs(dy) / stepLimit))
+    const sdx = dx / steps
+    const sdy = dy / steps
+    entity.x += sdx
+    for (let s = 0; s < steps; s++) {
+      entity.y += sdy
+      if (entity.vy >= 0 && this._resolvePlatformCollision(entity, sdy)) {
+        // 已着陆，停止后续子步的下落
+        break
+      }
+    }
 
     // 平台碰撞（仅下落时）
     entity.onGround = false
@@ -83,6 +95,27 @@ export class PhysicsEngine {
     if (entity.invincibleTimer > 0) entity.invincibleTimer = Math.max(0, entity.invincibleTimer - dt)
     if (entity.shockwaveTimer > 0) entity.shockwaveTimer = Math.max(0, entity.shockwaveTimer - dt)
     if (entity.stunTimer > 0) entity.stunTimer = Math.max(0, entity.stunTimer - dt)
+  }
+
+  // 解析单步下落与平台碰撞（子步积分调用）；返回 true 表示已着陆
+  // 使用相对 sdy 推回上帧底部（避免依赖固定 dt），适配任意子步步长
+  _resolvePlatformCollision(entity, sdy) {
+    if (entity.vy < 0) return false
+    const prevBottom = entity.y + entity.height - sdy
+    const newBottom = entity.y + entity.height
+    for (const plat of this.platforms) {
+      if (entity.x + entity.width > plat.x && entity.x < plat.x + plat.w) {
+        if (prevBottom <= plat.y + PHYS.platformTolerance && newBottom >= plat.y) {
+          entity.y = plat.y - entity.height
+          entity.vy = 0
+          entity.onGround = true
+          entity.onPlatform = plat
+          if (!entity.landSquashTimer) entity.landSquashTimer = 0.12
+          return true
+        }
+      }
+    }
+    return false
   }
 
   // 踩踏弹跳

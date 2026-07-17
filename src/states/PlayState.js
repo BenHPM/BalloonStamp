@@ -3,6 +3,7 @@ import { PHYS } from '../config/physics.js'
 import { WORLD } from '../config/world.js'
 import { PLAYER_CONFIG, PLATFORMS, LIGHTNING_CLOUDS, AIR_CURRENTS } from '../config/entities.js'
 import { Player } from '../entities/Player.js'
+import { EntityState } from '../entities/EntityState.js'
 import { Cloud, Whale, AirCurrent, Lightning } from '../entities/Environmental.js'
 import { CollisionSystem } from '../systems/CollisionSystem.js'
 import { AISystem } from '../systems/AISystem.js'
@@ -60,6 +61,12 @@ export class PlayState {
     this.player.y = PLAYER_CONFIG.spawnY
     this.player.id = 'player'
 
+    // 在生成初始 AI 前注入阶段 0 难度，让初始数量 = aiCount 而非满载 19
+    const startingDifficulty = this._getDifficulty()
+    this.spawnManager.setDifficulty({
+      allowBerserker: startingDifficulty.allowBerserker,
+      maxAliveAI: startingDifficulty.maxAliveAI,
+    })
     this.enemies = this.spawnManager.generateInitialEnemies()
     this.matchManager.setEntities([this.player, ...this.enemies])
 
@@ -70,13 +77,8 @@ export class PlayState {
 
     // 平台数据共享给 SpawnManager（AI 逃向最近平台）和 Enemy
     this.spawnManager.setPlatforms(PLATFORMS)
+    this.spawnManager.setZoneSystem(this.zoneSystem)
     this.enemies.forEach(e => { e._platforms = PLATFORMS })
-
-    // 预渲染精灵
-    if (engine.renderer && engine.renderer.entityRenderer) {
-      engine.renderer.entityRenderer.prerenderEntity(PLAYER_CONFIG.color, PLAYER_CONFIG.balloonColor)
-      this.enemies.forEach(e => engine.renderer.entityRenderer.prerenderEntity(e.color, e.balloonColor))
-    }
 
     // 注册触屏 UI
     const joystickEl = document.getElementById('joystick-zone')
@@ -112,7 +114,7 @@ export class PlayState {
       }
       // 还有命 → 暂时从 MatchManager 移除（等复活再加回）
       this.player.alive = false
-      this.player.state = PlayerState.ELIMINATED
+      this.player.state = EntityState.ELIMINATED
       this.matchManager.aliveEntities = this.matchManager.aliveEntities.filter(e => e !== this.player)
       this._respawnTimer = 2.0
       this._playerDead = true
@@ -124,6 +126,7 @@ export class PlayState {
   }
 
   fixedUpdate(dt) {
+    // dt 为 fixed step（1/60），由 GameEngine 主循环传入，保证所有模拟系统时间语义一致。
     const engine = this.engineRef
     engine.input.update()
 
@@ -149,7 +152,6 @@ export class PlayState {
     this._updateZone(dt, engine)
     this._updateSpawn(dt)
     engine.camera.follow(this.player.x + this.player.width / 2, this.player.y + this.player.height / 2)
-    engine.renderer.update(dt)
     this._checkMatchEnd()
   }
 
@@ -191,6 +193,11 @@ export class PlayState {
 
   _updateEnemies(dt) {
     const difficulty = this._getDifficulty()
+    // 把难度快照同步给 SpawnManager：控制 maxAliveAI 维护补员 + berserker 解锁
+    this.spawnManager.setDifficulty({
+      allowBerserker: difficulty.allowBerserker,
+      maxAliveAI: difficulty.maxAliveAI,
+    })
     this.aiSystem.update(this.enemies, this.player, dt, this.engineRef.physics, {
       lightningBolts: this.lightnings,
       whale: this.whale,
@@ -202,47 +209,59 @@ export class PlayState {
   }
 
   _resolveCollisions(engine) {
-    // 玩家 vs 敌人
-    this.enemies.forEach(enemy => {
-      if (!enemy.alive) return
-      const result = this.collision.checkCollision(this.player, enemy)
+    // 两段式碰撞解析：先收集所有碰撞对，再顺序 resolve。
+    // 使用 victimsThisFrame 防止同一受害者被多个攻击者重复 stomp/kick（互斥）。
+    const victimsThisFrame = new Set()
+    const stomps = []
+    const sides = []
+    const kicks = []
+
+    const handleResult = (result) => {
       if (!result) return
-      if (result.type === 'stomp') {
-        this.collision.resolveStomp(result.attacker, result.victim, engine.physics, this.scoreSystem, engine.renderer.particles)
-        engine.renderer.shake(3)
-        if (result.attacker === this.player) {
-          engine.renderer.emitText(result.victim.x, result.victim.y, 'stomp')
-        }
-      } else if (result.type === 'side') {
-        this.collision.resolveSide(result.a, result.b, engine.physics)
-      } else if (result.type === 'kick') {
-        this._eliminate(result.victim)
-        this.scoreSystem.addEliminationScore(result.attacker)
-        engine.renderer.particles.burst(result.victim.x, result.victim.y, result.victim.color, PHYS.stompParticleCount)
-        engine.renderer.shake(6)
-        engine.renderer.emitText(result.victim.x, result.victim.y, 'elimination')
+      if (result.type === 'stomp' && result.attacker.alive && result.victim.alive &&
+          !victimsThisFrame.has(result.victim)) {
+        stomps.push(result)
+        victimsThisFrame.add(result.victim)
+      } else if (result.type === 'side' && result.a.alive && result.b.alive) {
+        sides.push(result)
+      } else if (result.type === 'kick' && result.attacker.alive && result.victim.alive &&
+                 !victimsThisFrame.has(result.victim)) {
+        kicks.push(result)
+        victimsThisFrame.add(result.victim)
       }
-    })
+    }
+
+    // 玩家 vs 敌人
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) continue
+      if (this.player.state === EntityState.ELIMINATED || !this.player.alive) continue
+      handleResult(this.collision.checkCollision(this.player, enemy))
+    }
 
     // 敌人之间碰撞
     for (let i = 0; i < this.enemies.length; i++) {
       for (let j = i + 1; j < this.enemies.length; j++) {
         if (!this.enemies[i].alive || !this.enemies[j].alive) continue
-        const result = this.collision.checkCollision(this.enemies[i], this.enemies[j])
-        if (!result) continue
-        if (result.type === 'stomp') {
-          this.collision.resolveStomp(result.attacker, result.victim, engine.physics, null, engine.renderer.particles)
-          engine.renderer.shake(3)
-        } else if (result.type === 'side') {
-          this.collision.resolveSide(result.a, result.b, engine.physics)
-        } else if (result.type === 'kick') {
-          this._eliminate(result.victim)
-          engine.renderer.particles.burst(result.victim.x, result.victim.y, result.victim.color, PHYS.stompParticleCount)
-          engine.renderer.shake(6)
-          engine.renderer.emitText(result.victim.x, result.victim.y, 'elimination')
-        }
+        handleResult(this.collision.checkCollision(this.enemies[i], this.enemies[j]))
       }
     }
+
+    // 顺序 resolve：先 stomp（可能把 victim 气球踩到 0，进而可被 kick），再 kick，最后 side
+    stomps.forEach(r => {
+      this.collision.resolveStomp(r.attacker, r.victim, engine.physics, this.scoreSystem, engine.renderer.particles)
+      engine.renderer.shake(3)
+      if (r.attacker === this.player) engine.renderer.emitText(r.victim.x, r.victim.y, 'stomp')
+    })
+    kicks.forEach(r => {
+      // 二次校验：若 stomp 阶段已把 victim 踩到 0 且 victim 已死，跳过
+      if (!r.victim.alive) return
+      this._eliminate(r.victim)
+      this.scoreSystem.addEliminationScore(r.attacker)
+      engine.renderer.particles.burst(r.victim.x, r.victim.y, r.victim.color, PHYS.stompParticleCount)
+      engine.renderer.shake(6)
+      engine.renderer.emitText(r.victim.x, r.victim.y, 'elimination')
+    })
+    sides.forEach(r => this.collision.resolveSide(r.a, r.b, engine.physics))
   }
 
   _updateEnvironment(dt, engine) {
@@ -294,6 +313,8 @@ export class PlayState {
     this.zoneSystem.update(dt, this.matchManager.getAliveCount())
     const allAlive = [this.player, ...this.enemies].filter(e => e.alive)
     allAlive.forEach(e => {
+      // 无敌时间（如复活保护）免疫缩圈 zone 伤害
+      if (e.invincibleTimer > 0) return
       this.zoneSystem.applyZoneForce(e, dt)
       const zoneResult = this.zoneSystem.tickEntity(e, dt)
 
@@ -338,7 +359,7 @@ export class PlayState {
   }
 
   _updateSpawn(dt) {
-    this.spawnManager.update(dt, this.matchManager)
+    this.spawnManager.update(dt, this.matchManager, () => this.enemies)
   }
 
   _checkMatchEnd() {
@@ -360,26 +381,50 @@ export class PlayState {
   _respawnPlayer() {
     this.player.alive = true
     this.player.balloons = 2
-    this.player.state = PlayerState.FLYING
-    this.player.x = this._playerRespawnPos.x
-    this.player.y = this._playerRespawnPos.y
+    this.player.state = EntityState.FLYING
+    // 复活点：安全区内最近平台，避免「复活即圈外」死亡螺旋
+    const pos = this._findSafeRespawnPos()
+    this.player.x = pos.x
+    this.player.y = pos.y
     this.player.vx = 0
     this.player.vy = 0
     this.player.onGround = false
-    this.player.invincibleTimer = 3.0 // 3 秒无敌
+    this.player.invincibleTimer = 3.0 // 3 秒无敌（同时免疫 zone 伤害）
     this.player.landSquashTimer = 0
     this.player.shockwaveTimer = 0
     this._playerDead = false
     this._respawnFlash = 0
-    // 将玩家加回 MatchManager
-    if (!this.matchManager.aliveEntities.includes(this.player)) {
-      this.matchManager.aliveEntities.push(this.player)
+    // 玩家复活：使用统一入口，避免手动维护 eliminated 导致排名错乱
+    this.matchManager.respawnEntity(this.player)
+  }
+
+  // 寻找安全区内的最近平台（用于复活落地）；若无则退回到 zone 中心上空
+  _findSafeRespawnPos() {
+    const zs = this.zoneSystem
+    const cx = zs.zoneCenterX
+    const cy = zs.zoneCenterY
+    const safeR = zs.zoneRadius * 0.6
+    let best = null
+    let bestDist = Infinity
+    for (const plat of PLATFORMS) {
+      const px = plat.x + plat.w / 2
+      const py = plat.y
+      const dCenter = Math.hypot(px - cx, py - cy)
+      if (dCenter > safeR) continue
+      const dPlayer = Math.hypot(px - this.player.x, py - this.player.y)
+      if (dPlayer < bestDist) { bestDist = dPlayer; best = { x: px - this.player.width / 2, y: py - this.player.height } }
     }
-    this.matchManager.eliminated = this.matchManager.eliminated.filter(e => e !== this.player)
+    if (best) return best
+    return { x: cx - this.player.width / 2, y: cy - this.player.height - 50 }
   }
 
   render(ctx, camera, dt) {
+    // 帧边界：清除上一帧遗留的临时互斥标记（render 每帧仅一次，是真帧边界）
     const engine = this.engineRef
+    this.player.clearFrameFlags()
+    for (const e of this.enemies) e.clearFrameFlags()
+    // 渲染层动画（粒子/浮字/背景/震动）使用帧 dt，与固定步长模拟解耦
+    engine.renderer.update(dt)
     engine.renderer.render(ctx, camera, {
       player: this.player,
       enemies: this.enemies,

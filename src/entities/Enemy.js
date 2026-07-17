@@ -2,7 +2,7 @@
 import { PHYS } from '../config/physics.js'
 import { AI_TYPES, AI_DECISION_INTERVAL } from '../config/entities.js'
 import { WORLD } from '../config/world.js'
-import { PlayerState } from './Player.js'
+import { EntityState } from './EntityState.js'
 import { BalloonEntity } from './BalloonEntity.js'
 
 export class Enemy extends BalloonEntity {
@@ -36,17 +36,19 @@ export class Enemy extends BalloonEntity {
   get effectiveWidth() { return this.width * this.scale / this.baseScale }
   get effectiveHeight() { return this.height * this.scale / this.baseScale }
 
-  // AI 决策 — 带目标优先级、危险规避和难度阶段
+  // AI 决策 — 带目标优先级、危险规避、缩圈意识和难度阶段
   decideAI(player, dt, context = {}) {
-    const { allEnemies, lightningBolts, whale, difficulty = {} } = context
+    const { allEnemies, lightningBolts, whale, zoneCenterX, zoneCenterY, zoneRadius, difficulty = {} } = context
 
-    if (!this.alive || this.state === PlayerState.INFLATING || this.state === PlayerState.ELIMINATED) {
+    if (!this.alive || this.state === EntityState.INFLATING || this.state === EntityState.ELIMINATED) {
       return { moveX: 0, flapJustPressed: false }
     }
 
     this.aiTimer += dt
     if (this.aiTimer < this._decisionInterval) {
-      return { moveX: this.moveDir, flapJustPressed: false }
+      // 决策间隔内不重算路径，但保底：危险高度仍会拍打避免直接坠入水中
+      const flapJustPressed = this.balloons > 0 && this._isInDangerAltitude()
+      return { moveX: this.moveDir, flapJustPressed }
     }
     this.aiTimer = 0
 
@@ -58,8 +60,13 @@ export class Enemy extends BalloonEntity {
       return this._dodgeMove(flapMult)
     }
 
+    // P0.5: 圈外 → 最高优先级飞回安全区（避免 AI 站毒圈发呆）
+    if (this._isOutsideZone(zoneCenterX, zoneCenterY, zoneRadius)) {
+      return this._moveTowardZone(zoneCenterX, zoneCenterY, flapMult)
+    }
+
     // P1: 0 气球 → 优先逃到最近平台
-    if (this.balloons === 0 && this.state !== PlayerState.INFLATING) {
+    if (this.balloons === 0 && this.state !== EntityState.INFLATING) {
       return this._fleeToNearestPlatform(flapMult)
     }
 
@@ -72,6 +79,28 @@ export class Enemy extends BalloonEntity {
 
     // P3: 随机巡逻
     return this._roam()
+  }
+
+  _isOutsideZone(cx, cy, radius) {
+    if (cx == null || radius == null) return false
+    const x = this.x + this.width / 2
+    const y = this.y + this.height / 2
+    return Math.hypot(x - cx, y - cy) > radius
+  }
+
+  // 接近危险高度：离水面较近时会持续拍打维持高度（决策间隔内保底）
+  _isInDangerAltitude() {
+    return this.y + this.height > WORLD.waterY - 120
+  }
+
+  _moveTowardZone(cx, cy, flapMult = 1) {
+    const myX = this.x + this.width / 2
+    this.moveDir = cx > myX + 5 ? 1 : (cx < myX - 5 ? -1 : 0)
+    // 被圈推向下时需频繁拍打维持高度
+    if (this.balloons > 0 && this.y > cy && Math.random() < (0.5 * flapMult)) {
+      return { moveX: this.moveDir, flapJustPressed: true }
+    }
+    return { moveX: this.moveDir, flapJustPressed: false }
   }
 
   _pickTarget(player, allEnemies, chaseRate) {

@@ -10,10 +10,11 @@ export class CollisionSystem {
     if (a.y + a.height <= b.y || b.y + b.height <= a.y) return null
 
     // 踢杀：攻击方有气球 + 被攻方 0 气球 + 在地面
-    if (a.balloons > 0 && b.balloons === 0 && b.onGround) {
+    // 被攻方需存活且未在本帧被 stomp 到 0 气球（避免同帧 stomp→kick 连击）
+    if (a.balloons > 0 && b.balloons === 0 && b.onGround && !b.justLostAllBalloons) {
       return { type: 'kick', attacker: a, victim: b }
     }
-    if (b.balloons > 0 && a.balloons === 0 && a.onGround) {
+    if (b.balloons > 0 && a.balloons === 0 && a.onGround && !a.justLostAllBalloons) {
       return { type: 'kick', attacker: b, victim: a }
     }
 
@@ -23,6 +24,8 @@ export class CollisionSystem {
     const bFromAbove = b.vy > 0 && (b.y + b.height * 0.5) < (a.y + a.height * 0.5) &&
       (b.y + b.height) - a.y > PHYS.stompOverlapDepth
 
+    // 注意：aFromAbove 与 bFromAbove 互为逆命题，在有限精度内不应同时成立。
+    // 当双方齐平（两者都不满足 fromAbove）时，走 side 分支弹开，是原定行为。
     if (aFromAbove && !bFromAbove && a.balloons > 0 && b.balloons > 0) {
       return { type: 'stomp', attacker: a, victim: b }
     }

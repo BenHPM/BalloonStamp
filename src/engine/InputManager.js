@@ -12,6 +12,8 @@ export class InputManager {
     this._flapBtnEl = null
     this._joystickCleanup = null
     this._flapCleanup = null
+    this._keyboardCleanup = null
+    this._gamepadCleanup = null
 
     this._initKeyboard()
     this._initGamepad()
@@ -30,8 +32,25 @@ export class InputManager {
   }
 
   cleanup() {
+    // 仅清理每局可重绑的触屏 UI 元素监听器（joystick / flap 按钮由 PlayState 注入），
+    // 保留全局键盘/手柄监听，因为 InputManager 是跨状态单例，cleanup 在 state.exit 调用。
+    // 同时清空按键状态，避免 state 切换时残留按键被新状态读入。
     this._cleanupJoystick()
     this._cleanupFlap()
+    this._keys = {}
+    this._prevFlap = false
+    this._touchJoystick.active = false
+    this._touchJoystick.dx = 0
+    this._touchJoystick.dy = 0
+    this._touchFlap = false
+  }
+
+  // 彻底销毁（只在 engine 卸载时调用），连全局键盘/手柄监听一并移除。
+  destroy() {
+    this._cleanupJoystick()
+    this._cleanupFlap()
+    this._cleanupKeyboard()
+    this._cleanupGamepad()
   }
 
   _cleanupJoystick() {
@@ -39,6 +58,12 @@ export class InputManager {
   }
   _cleanupFlap() {
     if (this._flapCleanup) { this._flapCleanup(); this._flapCleanup = null }
+  }
+  _cleanupKeyboard() {
+    if (this._keyboardCleanup) { this._keyboardCleanup(); this._keyboardCleanup = null }
+  }
+  _cleanupGamepad() {
+    if (this._gamepadCleanup) { this._gamepadCleanup(); this._gamepadCleanup = null }
   }
 
   _initKeyboard() {
@@ -50,11 +75,21 @@ export class InputManager {
     this._onKeyUp = (e) => { this._keys[e.code] = false }
     window.addEventListener('keydown', this._onKeyDown)
     window.addEventListener('keyup', this._onKeyUp)
+    this._keyboardCleanup = () => {
+      window.removeEventListener('keydown', this._onKeyDown)
+      window.removeEventListener('keyup', this._onKeyUp)
+    }
   }
 
   _initGamepad() {
-    window.addEventListener('gamepadconnected', (e) => { this._gamepadIndex = e.gamepad.index })
-    window.addEventListener('gamepaddisconnected', () => { this._gamepadIndex = null })
+    this._onGamepadConnected = (e) => { this._gamepadIndex = e.gamepad.index }
+    this._onGamepadDisconnected = () => { this._gamepadIndex = null }
+    window.addEventListener('gamepadconnected', this._onGamepadConnected)
+    window.addEventListener('gamepaddisconnected', this._onGamepadDisconnected)
+    this._gamepadCleanup = () => {
+      window.removeEventListener('gamepadconnected', this._onGamepadConnected)
+      window.removeEventListener('gamepaddisconnected', this._onGamepadDisconnected)
+    }
   }
 
   _initJoystick(el) {
@@ -72,6 +107,7 @@ export class InputManager {
       this._touchJoystick.dx = t.clientX - this._touchJoystick.startX
       this._touchJoystick.dy = t.clientY - this._touchJoystick.startY
     }
+    const onMouseMove = (e) => { if (this._touchJoystick.active) move(e) }
     const end = (e) => {
       e.preventDefault()
       this._touchJoystick.active = false
@@ -82,7 +118,7 @@ export class InputManager {
     el.addEventListener('touchmove', move, { passive: false })
     el.addEventListener('touchend', end, { passive: false })
     el.addEventListener('mousedown', start)
-    el.addEventListener('mousemove', (e) => { if (this._touchJoystick.active) move(e) })
+    el.addEventListener('mousemove', onMouseMove)
     el.addEventListener('mouseup', end)
     el.addEventListener('mouseleave', end)
 
@@ -91,6 +127,7 @@ export class InputManager {
       el.removeEventListener('touchmove', move)
       el.removeEventListener('touchend', end)
       el.removeEventListener('mousedown', start)
+      el.removeEventListener('mousemove', onMouseMove)
       el.removeEventListener('mouseup', end)
       el.removeEventListener('mouseleave', end)
     }

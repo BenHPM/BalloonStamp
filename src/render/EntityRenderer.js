@@ -3,12 +3,7 @@ import { VISUALS } from '../config/visuals.js'
 
 export class EntityRenderer {
   constructor() {
-    // 不再使用 SpriteCache 画角色，改为实时绘制
-    // 气球数量动态变化，预渲染精灵无法表达
-  }
-
-  prerenderEntity(color, balloonColor) {
-    // 保留接口兼容，不再需要预渲染
+    // 角色使用实时绘制（气球数量动态变化，预渲染精灵无法表达）
   }
 
   renderEntity(ctx, entity) {

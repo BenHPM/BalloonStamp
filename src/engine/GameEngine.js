@@ -3,7 +3,6 @@ import { PHYS } from '../config/physics.js'
 import { WORLD } from '../config/world.js'
 import { Camera } from './Camera.js'
 import { InputManager } from './InputManager.js'
-import { SpatialGrid } from './SpatialGrid.js'
 
 export class GameEngine {
   constructor(canvas) {
@@ -11,7 +10,6 @@ export class GameEngine {
     this.ctx = canvas.getContext('2d')
     this.camera = new Camera(WORLD.width, WORLD.height, WORLD.viewPortrait.w, WORLD.viewPortrait.h)
     this.input = new InputManager(canvas)
-    this.spatialGrid = new SpatialGrid(WORLD.width, WORLD.height, WORLD.cellSize)
     this.state = null
     this.renderer = null
     this.physics = null
@@ -21,6 +19,7 @@ export class GameEngine {
     this.lastTime = 0
     this.accumulator = 0
     this.fixedStep = 1 / 60
+    this.maxSteps = 5 // 每帧最大 fixed steps：防止切标签/GC 卡顿后连跑多步导致瞬移穿透
     this.running = false
   }
 
@@ -46,10 +45,14 @@ export class GameEngine {
     if (dt > 0.1) dt = 0.1 // 防止切标签暴走
 
     this.accumulator += dt
-    while (this.accumulator >= this.fixedStep) {
-      if (this.state && this.state.fixedUpdate) this.state.fixedUpdate(this.fixedStep)
+    let steps = 0
+    while (this.accumulator >= this.fixedStep && steps < this.maxSteps) {
+      if (this.state && this.state.fixedUpdate) this.state.fixedUpdate(this.fixedStep, steps)
       this.accumulator -= this.fixedStep
+      steps++
     }
+    // 若仍超阈值（达到 maxSteps 上限），丢弃积攒的时间，避免下一帧继续追赶
+    if (this.accumulator >= this.fixedStep) this.accumulator = 0
 
     if (this.state && this.state.render) {
       this.ctx.save()

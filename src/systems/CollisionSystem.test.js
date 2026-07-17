@@ -40,4 +40,12 @@ describe('CollisionSystem', () => {
     const b = makeEntity(500, 500)
     expect(cs.checkCollision(a, b)).toBeNull()
   })
+
+  it('falls back to side when ambiguous but victim has 0 balloons (ineligible stomp)', () => {
+    const cs = new CollisionSystem()
+    const a = makeEntity(100, 100, 0, 300, 2)
+    const b = makeEntity(100, 100, 0, 300, 0) // 0 气球 → 不可被 stomp
+    const result = cs.checkCollision(a, b)
+    expect(result.type).toBe('side')
+  })
 })
