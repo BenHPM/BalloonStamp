@@ -1,22 +1,33 @@
 // src/config/physics.js
 // 所有数值以"世界单位/秒"定义，固定步长 dt=1/60s 应用
+// 物理模型参考 FC 气球大战 ROM 拆解 (LuigiBlood/balloonfight_dis)
+// FC 终端下落 ≈ 2px/frame = 120px/s，水平加速 ≈ 10/256 px/frame²
+// 因 .io 大地图(2400x1800 vs FC 256x240)，按屏幕比例放大约 2.5-3×
 export const PHYS = {
-  // 重力（按气球数索引：0最重，5最轻）
-  gravity: [1050, 880, 720, 620, 520, 420],
-  // 拍打冲量（负值=向上；比之前降低约 30%，让拍打更柔和）
-  flapImpulse: [0, -260, -290, -310, -330, -350],
-  flapCooldown: 0.5,
-  // 水平移动
-  moveAccel: 2000,
-  maxMoveSpeed: 280,
-  coastFriction: 0.96, // 无输入时的速度衰减（每帧乘以该值；0.96 约 0.5 秒停住，止漂）
-  groundFriction: 0.88, // 地面额外摩擦（每帧乘以该值；更快速停止）
+  // 重力：恒定向下加速度
+  gravity: 650,
+  // 浮力：按气球数提供向上加速度（FC 原作气球数仅 0-2，此处扩展至 5 支持 .io 玩法）
+  // FC 2气球≈中性浮力，BalloonStamp 2气球保留极轻下落(120px/s)以维持"必须拍打"的核心循环
+  buoyancy: [0, 280, 530, 630, 700, 750],
+
+  // 拍打冲量（加法脉冲：在当前 vy 基础上叠加，而非覆盖）
+  // FC 原作拍打 ≈ vy += impulse(小冲量+高频)，产生"小鸟振翅"轻盈感
+  flapImpulse: [0, -150, -170, -190, -210, -230],
+  flapCooldown: 0.10,
+
+  // 水平移动：加速度模型（FC 空中=地面完全相同加速度）
+  // FC 水平加速 ≈ 10/256 px/frame² = 140px/s²；.io 大地图放大至 500
+  moveAccel: 500,
+  maxMoveSpeed: 250,
+  // 空中摩擦极轻（FC 约 1-2%/帧），保持水平动量 → 标志性"飘滑感"
+  coastFriction: 0.993,
+  groundFriction: 0.88,
   moveDeadZone: 0.05,
-  // 终速
-  terminalVelocityDown: 500,
-  terminalVelocityUp: 600,
+  // 终速（参考 FC 终端下落 ≈ 120px/s，.io 放大至 350）
+  terminalVelocityDown: 350,
+  terminalVelocityUp: 500,
   // 踩踏弹跳
-  stompBounceFactor: 0.8,
+  stompBounceFactor: 0.75,
   // 气球
   maxBalloons: 5,
   initialBalloons: 2,
@@ -47,5 +58,5 @@ export const PHYS = {
   // 侧面弹开
   bounceForce: 200,
   // 击晕（侧面碰撞硬直）
-  stunDuration: 0.3, // 秒
+  stunDuration: 0.3,
 }

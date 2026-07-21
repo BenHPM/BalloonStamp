@@ -60,6 +60,19 @@ export class SpawnManager {
   }
 
   _pickEdgePosition(index, total) {
+    // 将 AI 分散到各平台上方，避免集中在中心圆环与玩家重叠
+    // 优先使用平台位置，平台不够时退回到圆环分布
+    if (this._platforms.length > 0) {
+      // 按索引轮流选平台，加上随机偏移避免完全重叠
+      const platIndex = index % this._platforms.length
+      const plat = this._platforms[platIndex]
+      const offsetX = (Math.random() - 0.5) * plat.w * 0.6
+      return {
+        x: plat.x + plat.w / 2 + offsetX,
+        y: plat.y - 40 - Math.random() * 30, // 平台上方 40-70 像素
+      }
+    }
+    // 退回：圆环分布
     const angle = (index / total) * Math.PI * 2
     const cx = WORLD.width / 2
     const cy = WORLD.height / 2

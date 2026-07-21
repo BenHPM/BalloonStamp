@@ -41,15 +41,17 @@ export class PlayState {
     const t = this.matchManager.matchTime
     const phases = WORLD.difficultyPhases || []
     let phase = phases[phases.length - 1]
-    for (const p of phases) {
-      if (t >= p.time) phase = p
+    let phaseIndex = phases.length - 1
+    for (let i = 0; i < phases.length; i++) {
+      if (t >= phases[i].time) { phase = phases[i]; phaseIndex = i }
     }
-    if (!phase) return { chaseMultiplier: 1, flapMultiplier: 1 }
+    if (!phase) return { chaseMultiplier: 1, flapMultiplier: 1, phaseIndex: 0 }
     return {
       chaseMultiplier: phase.chaseMultiplier,
       flapMultiplier: phase.flapMultiplier,
       maxAliveAI: phase.aiCount,
       allowBerserker: phase.berserker,
+      phaseIndex,
     }
   }
 
@@ -148,6 +150,9 @@ export class PlayState {
     this._updatePlayer(dt)
     this._updateEnemies(dt)
     this._resolveCollisions(engine)
+    // 环境实体随难度阶段升级：云放电频率递增
+    const difficulty = this._getDifficulty()
+    this.clouds.forEach(c => c.setPhase(difficulty.phaseIndex))
     this._updateEnvironment(dt, engine)
     this._updateZone(dt, engine)
     this._updateSpawn(dt)
@@ -159,7 +164,11 @@ export class PlayState {
 
   _updateCountdown(dt) {
     this.countdown -= dt
-    if (this.countdown <= 0) this.phase = 'playing'
+    if (this.countdown <= 0) {
+      this.phase = 'playing'
+      // 开局短暂无敌，防止倒计时结束瞬间被附近 AI 撞击
+      this.player.invincibleTimer = 1.5
+    }
   }
 
   _updateMatchManager(dt) {

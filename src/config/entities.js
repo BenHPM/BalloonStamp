@@ -3,7 +3,8 @@ export const PLAYER_CONFIG = {
   width: 28, height: 36,
   color: '#4DA6FF',
   balloonColor: '#4DA6FF',
-  spawnX: 1200, spawnY: 200,
+  // 出生点：左上角区域，远离 AI 初始分布圆环（中心 1200,900 半径 720）
+  spawnX: 200, spawnY: 200,
 }
 
 export const AI_TYPES = {

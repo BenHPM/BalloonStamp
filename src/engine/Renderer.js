@@ -24,12 +24,11 @@ export class Renderer {
   update(dt) {
     this.time += dt
     this.bg.update(dt)
+    this.entityRenderer.update(dt)
     this.particles.update(dt)
     this.floatingTexts.update(dt)
-    // 气流粒子
     this.airParticles.update(dt)
     AIR_CURRENTS.forEach(ac => this.airParticles.emitInZone(ac, 2))
-    // 震动衰减
     if (this.shakeIntensity > 0.1) {
       this.shakeIntensity *= Math.exp(-this.shakeDecay * dt)
     } else {
@@ -79,32 +78,114 @@ export class Renderer {
       ctx.fill()
     })
 
-    // 闪电
+    // 闪电（锯齿折线 + 多层发光 + 头部光球）
     if (data.lightnings) {
       data.lightnings.forEach(l => {
-        ctx.strokeStyle = '#FFFF00'
+        const bx = l.x
+        const by = l.y
+        const endX = bx + (l.cloudX - bx) * 0.3
+        const endY = by + l.vy * 0.06
+
+        // 外层发光（宽+透明）
+        ctx.globalAlpha = 0.15
+        ctx.strokeStyle = '#8888FF'
+        ctx.lineWidth = 8
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.beginPath()
+        ctx.moveTo(bx, by)
+        const segs = 5
+        for (let s = 1; s <= segs; s++) {
+          const t = s / segs
+          const sx = bx + (endX - bx) * t + (Math.random() - 0.5) * 14
+          const sy = by + (endY - by) * t + (Math.random() - 0.5) * 10
+          ctx.lineTo(sx, sy)
+        }
+        ctx.stroke()
+
+        // 中层
+        ctx.globalAlpha = 0.5
+        ctx.strokeStyle = '#FFFF88'
         ctx.lineWidth = 3
         ctx.beginPath()
-        ctx.moveTo(l.x, l.y)
-        ctx.lineTo(l.x + l.vx * 0.05, l.y + l.vy * 0.05)
+        ctx.moveTo(bx, by)
+        for (let s = 1; s <= segs; s++) {
+          const t = s / segs
+          const sx = bx + (endX - bx) * t + (Math.random() - 0.5) * 8
+          const sy = by + (endY - by) * t + (Math.random() - 0.5) * 6
+          ctx.lineTo(sx, sy)
+        }
         ctx.stroke()
-        ctx.fillStyle = '#FFFF00'
+
+        // 核心白线
+        ctx.globalAlpha = 0.9
+        ctx.strokeStyle = '#FFFFFF'
+        ctx.lineWidth = 1.5
         ctx.beginPath()
-        ctx.arc(l.x, l.y, 4, 0, Math.PI * 2)
+        ctx.moveTo(bx, by)
+        for (let s = 1; s <= segs; s++) {
+          const t = s / segs
+          const sx = bx + (endX - bx) * t + (Math.random() - 0.5) * 3
+          const sy = by + (endY - by) * t + (Math.random() - 0.5) * 2
+          ctx.lineTo(sx, sy)
+        }
+        ctx.stroke()
+
+        // 头部光球
+        ctx.globalAlpha = 0.7
+        ctx.fillStyle = '#FFFFAA'
+        ctx.beginPath()
+        ctx.arc(bx, by, 5, 0, Math.PI * 2)
         ctx.fill()
+        ctx.globalAlpha = 1
       })
     }
 
-    // 鲸鱼
+    // 鲸鱼（分段身体 + 腹部白纹 + 尾鳍 + 水花）
     if (data.whale && data.whale.state !== 'hidden') {
       const wh = data.whale
+      const t = this.time
+
       if (wh.state === 'warning') {
         this._renderWhaleWarning(ctx, wh)
+      } else if (wh.state === 'jumping' || wh.state === 'charging') {
+        // 弹射轨迹拖尾气泡
+        const trailCount = 5
+        for (let i = 0; i < trailCount; i++) {
+          const tp = i / trailCount
+          const tx = (wh.x || 0) - (wh.launchVx || 0) * tp
+          const ty = WORLD.waterY - (wh.launchVy || -400) * tp + 600 * tp * tp
+          const ta = (1 - tp) * 0.4
+          ctx.fillStyle = `rgba(180,220,255,${ta})`
+          ctx.beginPath()
+          ctx.arc(tx, ty, 3 + tp * 3, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        // 鲸鱼本体
+        this._renderWhaleBody(ctx, wh, t)
+        // 出水水花
+        if (wh.state === 'jumping') {
+          for (let i = 0; i < 6; i++) {
+            const angle = Math.PI + (i / 5) * Math.PI
+            const dist = 10 + Math.random() * 15
+            const sx = wh.x + Math.cos(angle) * dist
+            const sy = WORLD.waterY + Math.sin(angle) * dist * 0.4
+            ctx.fillStyle = 'rgba(200,230,255,0.5)'
+            ctx.beginPath()
+            ctx.arc(sx, sy, 1.5 + Math.random() * 2, 0, Math.PI * 2)
+            ctx.fill()
+          }
+        }
       } else {
-        ctx.fillStyle = '#4488AA'
-        ctx.beginPath()
-        ctx.ellipse(wh.x, wh.y, 40, 25, 0, 0, Math.PI * 2)
-        ctx.fill()
+        // returning / 入水
+        this._renderWhaleBody(ctx, wh, t)
+        // 入水溅水
+        if (wh.state === 'returning') {
+          ctx.fillStyle = 'rgba(200,230,255,0.4)'
+          ctx.beginPath()
+          ctx.ellipse(wh.x, WORLD.waterY, 25, 6, 0, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
     }
 
@@ -185,5 +266,73 @@ export class Renderer {
       else ctx.lineTo(x + dx, waveY)
     }
     ctx.stroke()
+  }
+
+  // 鲸鱼分段身体渲染
+  _renderWhaleBody(ctx, whale, t) {
+    const x = whale.x
+    const y = whale.y
+    const facingRight = whale.targetX > whale.x
+
+    ctx.save()
+    ctx.translate(x, y)
+    if (!facingRight) ctx.scale(-1, 1)
+
+    // 身体主体 — 深蓝渐变
+    const bodyGrad = ctx.createLinearGradient(0, -20, 0, 20)
+    bodyGrad.addColorStop(0, '#5BA0C8')
+    bodyGrad.addColorStop(0.5, '#3D7EA0')
+    bodyGrad.addColorStop(1, '#2A5F7A')
+    ctx.fillStyle = bodyGrad
+    ctx.beginPath()
+    ctx.ellipse(0, 0, 38, 18, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    // 腹部白纹
+    ctx.fillStyle = 'rgba(240,248,255,0.45)'
+    ctx.beginPath()
+    ctx.ellipse(0, 6, 24, 9, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    // 尾鳍（摆动）
+    const tailWag = Math.sin(t * 8) * 0.3
+    ctx.fillStyle = '#2A5F7A'
+    ctx.beginPath()
+    ctx.moveTo(-35, 0)
+    ctx.quadraticCurveTo(-48, -12 + tailWag * 10, -55, -8 + tailWag * 12)
+    ctx.quadraticCurveTo(-50, 0, -55, 8 - tailWag * 12)
+    ctx.quadraticCurveTo(-48, 12 - tailWag * 10, -35, 0)
+    ctx.fill()
+
+    // 背鳍
+    ctx.fillStyle = '#3D7EA0'
+    ctx.beginPath()
+    ctx.moveTo(5, -16)
+    ctx.quadraticCurveTo(10, -26, 20, -16)
+    ctx.fill()
+
+    // 胸鳍
+    const finFlap = Math.sin(t * 4) * 0.2
+    ctx.fillStyle = 'rgba(50,100,140,0.7)'
+    ctx.beginPath()
+    ctx.ellipse(15, 8, 14, 5, 0.3 + finFlap, 0, Math.PI * 2)
+    ctx.fill()
+
+    // 眼睛
+    ctx.fillStyle = '#fff'
+    ctx.beginPath(); ctx.arc(22, -5, 4, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = '#111'
+    ctx.beginPath(); ctx.arc(23.5, -5, 2, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.beginPath(); ctx.arc(24, -5.8, 0.8, 0, Math.PI * 2); ctx.fill()
+
+    // 嘴巴（微笑弧线）
+    ctx.strokeStyle = 'rgba(20,50,70,0.5)'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(28, -2, 3, 0.3, Math.PI - 0.3)
+    ctx.stroke()
+
+    ctx.restore()
   }
 }

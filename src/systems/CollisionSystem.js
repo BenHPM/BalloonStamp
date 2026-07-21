@@ -5,6 +5,9 @@ export class CollisionSystem {
   // 检查两个实体之间的碰撞
   checkCollision(a, b) {
     if (!a.alive || !b.alive) return null
+    // 无敌时间免疫碰撞（开局保护、复活保护）
+    if (a.invincibleTimer > 0 || b.invincibleTimer > 0) return null
+
     // AABB 重叠
     if (a.x + a.width <= b.x || b.x + b.width <= a.x) return null
     if (a.y + a.height <= b.y || b.y + b.height <= a.y) return null

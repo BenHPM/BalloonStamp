@@ -14,9 +14,14 @@ export class PhysicsEngine {
   update(entity, input, dt) {
     const balloons = Math.max(0, Math.min(5, entity.balloons))
 
-    // 重力
-    const gravity = PHYS.gravity[balloons] || PHYS.gravity[0]
-    entity.vy += gravity * dt
+    // 重力 + 浮力：恒定重力向下，气球提供恒定浮力向上
+    // FC 气球大战核心手感：重力始终拉你，气球始终托你，两者对抗产生"悬浮"感
+    const wasOnGround = entity.onGround
+    if (!wasOnGround || entity.vy < 0) {
+      const gravity = PHYS.gravity
+      const buoyancy = PHYS.buoyancy[balloons] || 0
+      entity.vy += (gravity - buoyancy) * dt
+    }
 
     // 终速
     if (entity.vy > PHYS.terminalVelocityDown) entity.vy = PHYS.terminalVelocityDown
@@ -43,10 +48,14 @@ export class PhysicsEngine {
     const maxSpeed = PHYS.maxMoveSpeed * (1 + Math.max(0, balloons - PHYS.initialBalloons) * PHYS.speedPerBalloon) * (entity.speed || 1)
     entity.vx = Math.max(-maxSpeed, Math.min(maxSpeed, entity.vx))
 
-    // 拍打：轻点一下拍一次，长按住 cooldown 结束后持续拍打
+    // 拍打：加法脉冲（在当前 vy 基础上叠加冲量，而非覆盖）
+    // FC 原作拍打是 vy += impulse，允许连续拍打时速度叠加但有自然递减
+    // 配合短冷却(0.12s)产生"小鸟振翅"的精细高度控制
     entity.flapCooldown = Math.max(0, (entity.flapCooldown || 0) - dt)
     if (!isStunned && input.flap && balloons > 0 && entity.flapCooldown <= 0) {
-      entity.vy = PHYS.flapImpulse[balloons] || PHYS.flapImpulse[2]
+      const impulse = PHYS.flapImpulse[balloons] || PHYS.flapImpulse[2]
+      // 加法脉冲：叠加到当前速度，但不超过终速上限
+      entity.vy = Math.max(entity.vy + impulse, -PHYS.terminalVelocityUp)
       entity.flapCooldown = PHYS.flapCooldown
       entity.isFlapping = true
       entity.flapTimer = 0.15 // 拍打动画时长
@@ -107,11 +116,11 @@ export class PhysicsEngine {
     return false
   }
 
-  // 踩踏弹跳
+  // 踩踏弹跳（加法脉冲：在当前 vy 基础上叠加弹跳冲量）
   applyStompBounce(entity) {
     const balloons = Math.max(0, Math.min(5, entity.balloons))
     const impulse = PHYS.flapImpulse[balloons] || PHYS.flapImpulse[2]
-    entity.vy = impulse * PHYS.stompBounceFactor
+    entity.vy = Math.max(entity.vy + impulse * PHYS.stompBounceFactor, -PHYS.terminalVelocityUp)
     entity.landSquashTimer = 0.12 // 踩踏弹跳压扁
   }
 
