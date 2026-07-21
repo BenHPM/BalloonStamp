@@ -398,7 +398,7 @@ export class PlayState {
     this.player.vx = 0
     this.player.vy = 0
     this.player.onGround = false
-    this.player.invincibleTimer = 3.0 // 3 秒无敌（同时免疫 zone 伤害）
+    this.player.invincibleTimer = PHYS.invincibleDuration // 10 秒无敌（免疫碰撞+zone 伤害）
     this.player.landSquashTimer = 0
     this.player.shockwaveTimer = 0
     this._playerDead = false

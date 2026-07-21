@@ -78,6 +78,12 @@ export class EntityRenderer {
     ctx.save()
     ctx.translate(cx, cy)
 
+    // 无敌闪烁（半透明 + 每 150ms 脉冲）
+    if (entity.invincibleTimer > 0) {
+      const flash = Math.sin(entity.invincibleTimer * Math.PI * 6.67) > 0
+      ctx.globalAlpha = flash ? 0.45 : 0.7
+    }
+
     // 地面阴影（离地越高越透明）
     if (!entity.onGround) {
       const shadowOff = (entity.y + entity.height) - cy + 2

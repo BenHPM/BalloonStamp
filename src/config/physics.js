@@ -40,7 +40,7 @@ export const PHYS = {
   // 反馈动画
   landSquashDuration: 0.12,
   shockwaveDuration: 0.25,
-  invincibleDuration: 3.0,
+  invincibleDuration: 10.0,
   // 踩踏判定
   stompOverlapDepth: 5,
   stompParticleCount: 12,

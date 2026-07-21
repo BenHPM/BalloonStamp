@@ -1,6 +1,7 @@
 // src/managers/SpawnManager.js
 import { AI_DISTRIBUTION, TOTAL_ENTITIES } from '../config/entities.js'
 import { WORLD } from '../config/world.js'
+import { PHYS } from '../config/physics.js'
 import { Enemy } from '../entities/Enemy.js'
 
 export class SpawnManager {
@@ -143,6 +144,7 @@ export class SpawnManager {
           enemy.vx = 0; enemy.vy = 0
           enemy.landSquashTimer = 0
           enemy.shockwaveTimer = 0
+          enemy.invincibleTimer = PHYS.invincibleDuration // 10 秒无敌（免疫碰撞）
           enemy._platforms = this._platforms
           matchManager.respawnEntity(enemy)
         }
