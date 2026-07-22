@@ -7,18 +7,21 @@ import { FloatingTextSystem } from '../render/FloatingTextSystem.js'
 import { AirCurrentParticles } from '../render/AirCurrentRenderer.js'
 import { WORLD } from '../config/world.js'
 import { PLATFORMS, LIGHTNING_CLOUDS, AIR_CURRENTS } from '../config/entities.js'
+import { ASSETS } from './AssetLoader.js'
 
 export class Renderer {
-  constructor() {
-    this.bg = new BackgroundRenderer()
+  constructor(assetLoader) {
+    this.bg = new BackgroundRenderer(assetLoader)
     this.entityRenderer = new EntityRenderer()
     this.particles = new ParticleSystem()
     this.hud = new HUDRenderer()
     this.floatingTexts = new FloatingTextSystem()
     this.airParticles = new AirCurrentParticles()
-    this.time = 0
+    this.assetLoader = assetLoader
+    this.whaleSprite = null
     this.shakeIntensity = 0
     this.shakeDecay = 8
+    this.time = 0
   }
 
   update(dt) {
@@ -39,6 +42,14 @@ export class Renderer {
   // 触发屏幕震动（intensity: 像素偏移量，建议 3-12）
   shake(intensity) {
     this.shakeIntensity = Math.max(this.shakeIntensity, intensity)
+  }
+
+  /** 预加载所有外部精灵资源 */
+  async loadAssets() {
+    await this.bg.loadSky()
+    try {
+      this.whaleSprite = await this.assetLoader.load(ASSETS.whaleRound)
+    } catch { this.whaleSprite = null }
   }
 
   // 发射浮字
@@ -141,50 +152,58 @@ export class Renderer {
       })
     }
 
-    // 鲸鱼（分段身体 + 腹部白纹 + 尾鳍 + 水花）
+    // 鲸鱼（精灵图优先，回退到程序化绘制）
     if (data.whale && data.whale.state !== 'hidden') {
       const wh = data.whale
       const t = this.time
 
       if (wh.state === 'warning') {
         this._renderWhaleWarning(ctx, wh)
-      } else if (wh.state === 'jumping' || wh.state === 'charging') {
-        // 弹射轨迹拖尾气泡
-        const trailCount = 5
-        for (let i = 0; i < trailCount; i++) {
-          const tp = i / trailCount
-          const tx = (wh.x || 0) - (wh.launchVx || 0) * tp
-          const ty = WORLD.waterY - (wh.launchVy || -400) * tp + 600 * tp * tp
-          const ta = (1 - tp) * 0.4
-          ctx.fillStyle = `rgba(180,220,255,${ta})`
-          ctx.beginPath()
-          ctx.arc(tx, ty, 3 + tp * 3, 0, Math.PI * 2)
-          ctx.fill()
-        }
-        // 鲸鱼本体
-        this._renderWhaleBody(ctx, wh, t)
-        // 出水水花
-        if (wh.state === 'jumping') {
-          for (let i = 0; i < 6; i++) {
-            const angle = Math.PI + (i / 5) * Math.PI
-            const dist = 10 + Math.random() * 15
-            const sx = wh.x + Math.cos(angle) * dist
-            const sy = WORLD.waterY + Math.sin(angle) * dist * 0.4
-            ctx.fillStyle = 'rgba(200,230,255,0.5)'
-            ctx.beginPath()
-            ctx.arc(sx, sy, 1.5 + Math.random() * 2, 0, Math.PI * 2)
-            ctx.fill()
-          }
-        }
       } else {
-        // returning / 入水
-        this._renderWhaleBody(ctx, wh, t)
-        // 入水溅水
-        if (wh.state === 'returning') {
-          ctx.fillStyle = 'rgba(200,230,255,0.4)'
-          ctx.beginPath()
-          ctx.ellipse(wh.x, WORLD.waterY, 25, 6, 0, 0, Math.PI * 2)
-          ctx.fill()
+        if (this.whaleSprite) {
+          // 使用 Kenney 精灵图
+          const spriteSize = 64
+          const drawSize = 70
+          ctx.save()
+          ctx.translate(wh.x, wh.y)
+          const facingRight = (wh.targetX || wh.x) >= wh.x
+          if (!facingRight) ctx.scale(-1, 1)
+          ctx.globalAlpha = wh.state === 'jumping' ? 1 : 0.9
+          ctx.drawImage(this.whaleSprite, -drawSize / 2, -drawSize / 2, drawSize, drawSize)
+          ctx.restore()
+        } else {
+          // 回退：程序化身体
+          if (wh.state === 'jumping' || wh.state === 'charging') {
+            const trailCount = 5
+            for (let i = 0; i < trailCount; i++) {
+              const tp = i / trailCount
+              const tx = (wh.x || 0) - (wh.launchVx || 0) * tp
+              const ty = WORLD.waterY - (wh.launchVy || -400) * tp + 600 * tp * tp
+              ctx.fillStyle = `rgba(180,220,255,${(1 - tp) * 0.4})`
+              ctx.beginPath()
+              ctx.arc(tx, ty, 3 + tp * 3, 0, Math.PI * 2)
+              ctx.fill()
+            }
+            this._renderWhaleBody(ctx, wh, t)
+            if (wh.state === 'jumping') {
+              for (let i = 0; i < 6; i++) {
+                const angle = Math.PI + (i / 5) * Math.PI
+                const dist = 10 + Math.random() * 15
+                ctx.fillStyle = 'rgba(200,230,255,0.5)'
+                ctx.beginPath()
+                ctx.arc(wh.x + Math.cos(angle) * dist, WORLD.waterY + Math.sin(angle) * dist * 0.4, 1.5 + Math.random() * 2, 0, Math.PI * 2)
+                ctx.fill()
+              }
+            }
+          } else {
+            this._renderWhaleBody(ctx, wh, t)
+            if (wh.state === 'returning') {
+              ctx.fillStyle = 'rgba(200,230,255,0.4)'
+              ctx.beginPath()
+              ctx.ellipse(wh.x, WORLD.waterY, 25, 6, 0, 0, Math.PI * 2)
+              ctx.fill()
+            }
+          }
         }
       }
     }

@@ -2,12 +2,16 @@
 import { WORLD } from '../config/world.js'
 import { VISUALS } from '../config/visuals.js'
 import { AirCurrentParticles } from './AirCurrentRenderer.js'
+import { ASSETS } from '../engine/AssetLoader.js'
 
 export class BackgroundRenderer {
-  constructor() {
+  constructor(assetLoader) {
     this._cloudCache = new Map()
     this._cacheClouds()
     this.clouds = []
+    this.assetLoader = assetLoader
+    this.skyImage = null
+
     for (let i = 0; i < VISUALS.cloudCount; i++) {
       this.clouds.push({
         x: Math.random() * WORLD.width,
@@ -18,9 +22,17 @@ export class BackgroundRenderer {
         variant: Math.floor(Math.random() * 3),
       })
     }
-    // 预渲染远山层
     this._mountains = this._buildMountains()
     this.time = 0
+  }
+
+  /** 预加载天空盒图片 */
+  async loadSky() {
+    try {
+      this.skyImage = await this.assetLoader.load(ASSETS.skyDay)
+    } catch {
+      this.skyImage = null // 回退到渐变
+    }
   }
 
   _buildMountains() {
@@ -101,13 +113,19 @@ export class BackgroundRenderer {
     const w = camera.viewWidth
     const h = camera.viewHeight
 
-    // 天空渐变
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, h)
-    skyGrad.addColorStop(0, VISUALS.skyTop)
-    skyGrad.addColorStop(0.6, VISUALS.skyMid)
-    skyGrad.addColorStop(1, VISUALS.skyBottom)
-    ctx.fillStyle = skyGrad
-    ctx.fillRect(0, 0, w, h)
+    // 天空盒（如果加载成功）或回退到渐变
+    if (this.skyImage) {
+      // 天空盒是 2048x2048，截取上半部分作为天空
+      const srcH = this.skyImage.height / 2
+      ctx.drawImage(this.skyImage, 0, 0, this.skyImage.width, srcH, 0, 0, w, h)
+    } else {
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, h)
+      skyGrad.addColorStop(0, VISUALS.skyTop)
+      skyGrad.addColorStop(0.6, VISUALS.skyMid)
+      skyGrad.addColorStop(1, VISUALS.skyBottom)
+      ctx.fillStyle = skyGrad
+      ctx.fillRect(0, 0, w, h)
+    }
 
     // 太阳
     const sunX = w * 0.82
