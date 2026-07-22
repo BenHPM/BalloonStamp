@@ -6,10 +6,16 @@ export class EntityRenderer {
     this._balloonTime = 0
     this._grassCache = new Map()
     this._buildGrassCache()
+    this.animalSprites = null   // { panda, sloth, chick, gorilla, rhino: Image }
   }
 
   update(dt) {
     this._balloonTime += dt
+  }
+
+  /** 从 Renderer 注入动物精灵表，按实体类型查找 */
+  setAnimalSprites(sprites) {
+    this.animalSprites = sprites
   }
 
   _buildGrassCache() {
@@ -141,6 +147,66 @@ export class EntityRenderer {
       }
     }
 
+    // ─── 动物精灵渲染 ──────────────────────────────────
+    const spriteKey = this._getAnimalSpriteKey(entity)
+    const sprite = spriteKey && this.animalSprites ? this.animalSprites[spriteKey] : null
+
+    if (sprite) {
+      this._renderAnimalSprite(ctx, entity, sprite, animName, animFrame)
+    } else {
+      // 回退：程序化身体
+      this._renderProgrammaticBody(ctx, bodyColor)
+      this._drawLimbs(ctx, bodyColor, animName, animFrame, flip)
+      this._drawFace(ctx, bodyColor, animName, entity)
+    }
+
+    // 气球（最上层）
+    if (balloons > 0 && animName !== 'electrocute') {
+      this._drawBalloons(ctx, balloons, balloonColor, animFrame)
+    }
+    if (animName === 'inflate') {
+      const progress = 1 - (entity.inflateTimer || 0) / 1.5
+      this._drawBalloons(ctx, 1, balloonColor, animFrame, progress)
+    }
+
+    ctx.restore()
+  }
+
+  /** 根据实体类型获取对应的动物精灵 key */
+  _getAnimalSpriteKey(entity) {
+    if (entity.isPlayer) return 'panda'
+    if (entity.typeKey) {
+      const map = {
+        drifter: 'sloth',
+        chaser: 'chick',
+        ambusher: 'gorilla',
+        berserker: 'rhino',
+      }
+      return map[entity.typeKey] || null
+    }
+    return null
+  }
+
+  /** 渲染动物精灵（Kenney Round 系列，俯视角度） */
+  _renderAnimalSprite(ctx, entity, sprite, animName, animFrame) {
+    const bounceOffset = animName === 'flap' ? Math.sin(animFrame * 0.9) * -3 : 0
+    const drawSize = 44
+    const spriteY = -drawSize * 0.55 + bounceOffset
+
+    // 拍打 / 坠落时加白色轮廓发光表示高亮
+    if (animName === 'flap' || animName === 'electrocute') {
+      ctx.globalAlpha = 0.25
+      ctx.drawImage(sprite,
+        -drawSize / 2 - 2, spriteY - 2, drawSize + 4, drawSize + 4)
+      ctx.globalAlpha = 1
+    }
+
+    // 绘制精灵图（居中，原点在角色中心）
+    ctx.drawImage(sprite, -drawSize / 2, spriteY, drawSize, drawSize)
+  }
+
+  /** 程序化回退：旧版人形身体 */
+  _renderProgrammaticBody(ctx, bodyColor) {
     // 身体（渐变 + 阴影）
     ctx.fillStyle = 'rgba(0,0,0,0.06)'
     ctx.beginPath()
@@ -175,23 +241,6 @@ export class EntityRenderer {
     ctx.strokeStyle = VISUALS.bodyOutline
     ctx.lineWidth = 1.5
     ctx.stroke()
-
-    // 四肢
-    this._drawLimbs(ctx, bodyColor, animName, animFrame, flip)
-
-    // 脸部
-    this._drawFace(ctx, bodyColor, animName, entity)
-
-    // 气球（最上层）
-    if (balloons > 0 && animName !== 'electrocute') {
-      this._drawBalloons(ctx, balloons, balloonColor, animFrame)
-    }
-    if (animName === 'inflate') {
-      const progress = 1 - (entity.inflateTimer || 0) / 1.5
-      this._drawBalloons(ctx, 1, balloonColor, animFrame, progress)
-    }
-
-    ctx.restore()
   }
 
   _drawLimbs(ctx, bodyColor, animName, frame, flip) {

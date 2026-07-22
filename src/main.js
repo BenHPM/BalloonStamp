@@ -18,7 +18,12 @@ engine.physics.setPlatforms(PLATFORMS)
 // 预加载精灵资源（异步，不阻塞启动）
 assetLoader.loadAll([
   '/assets/sky/Skyboxes/skybox-day.png',
-  '/assets/animals/PNG/Round/whale.png',
+  '/assets/animals/PNG/Round/panda.png',
+  '/assets/animals/PNG/Round/sloth.png',
+  '/assets/animals/PNG/Round/chick.png',
+  '/assets/animals/PNG/Round/gorilla.png',
+  '/assets/animals/PNG/Round/rhino.png',
+  '/assets/cloud.png',
   '/assets/particles/PNG (Transparent)/circle_01.png',
   '/assets/particles/PNG (Transparent)/circle_02.png',
   '/assets/particles/PNG (Transparent)/light_01.png',

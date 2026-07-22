@@ -6,7 +6,7 @@ import { HUDRenderer } from '../render/HUDRenderer.js'
 import { FloatingTextSystem } from '../render/FloatingTextSystem.js'
 import { AirCurrentParticles } from '../render/AirCurrentRenderer.js'
 import { WORLD } from '../config/world.js'
-import { PLATFORMS, LIGHTNING_CLOUDS, AIR_CURRENTS } from '../config/entities.js'
+import { AIR_CURRENTS, LIGHTNING_CLOUDS, PLATFORMS } from '../config/entities.js'
 import { ASSETS } from './AssetLoader.js'
 
 export class Renderer {
@@ -18,7 +18,8 @@ export class Renderer {
     this.floatingTexts = new FloatingTextSystem()
     this.airParticles = new AirCurrentParticles()
     this.assetLoader = assetLoader
-    this.whaleSprite = null
+    this.animalSprites = {}       // { panda: Image, sloth: Image, ... }
+    this.cloudSprite = null
     this.shakeIntensity = 0
     this.shakeDecay = 8
     this.time = 0
@@ -47,9 +48,21 @@ export class Renderer {
   /** 预加载所有外部精灵资源 */
   async loadAssets() {
     await this.bg.loadSky()
+    // 加载动物精灵图（玩家 + 4种AI各一个）
+    const animalKeys = ['animalPanda', 'animalSloth', 'animalChick', 'animalGorilla', 'animalRhino']
+    const results = await Promise.allSettled(
+      animalKeys.map(k => this.assetLoader.load(ASSETS[k]))
+    )
+    const spriteMap = {}
+    animalKeys.forEach((k, i) => {
+      if (results[i].status === 'fulfilled') spriteMap[k.replace('animal', '').toLowerCase()] = results[i].value
+    })
+    this.animalSprites = spriteMap
+    this.entityRenderer.setAnimalSprites(spriteMap)
+    // 闪电云精灵
     try {
-      this.whaleSprite = await this.assetLoader.load(ASSETS.whaleRound)
-    } catch { this.whaleSprite = null }
+      this.cloudSprite = await this.assetLoader.load(ASSETS.cloudSprite)
+    } catch { this.cloudSprite = null }
   }
 
   // 发射浮字
@@ -81,131 +94,106 @@ export class Renderer {
     // 气流区（流动粒子 + 边框）
     this.airParticles.render(ctx, AIR_CURRENTS)
 
-    // 小白云
+    // 小白云（Kenney Cloud.png 精灵优先，回退到程序化圆）
     LIGHTNING_CLOUDS.forEach(lc => {
-      ctx.fillStyle = 'rgba(255,255,255,0.8)'
-      ctx.beginPath()
-      ctx.arc(lc.x, lc.y, lc.radius, 0, Math.PI * 2)
-      ctx.fill()
+      if (this.cloudSprite) {
+        const size = lc.radius * 2
+        ctx.globalAlpha = 0.85
+        ctx.drawImage(this.cloudSprite, lc.x - lc.radius, lc.y - lc.radius, size, size)
+        ctx.globalAlpha = 1
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.8)'
+        ctx.beginPath()
+        ctx.arc(lc.x, lc.y, lc.radius, 0, Math.PI * 2)
+        ctx.fill()
+      }
     })
 
-    // 闪电（锯齿折线 + 多层发光 + 头部光球）
+    // 闪电（Kenney light_01 光球 + spark_01 火花）
     if (data.lightnings) {
+      const lightImg = this.assetLoader.get(ASSETS.particleLight01)
+      const sparkImg = this.assetLoader.get(ASSETS.particleSpark01)
       data.lightnings.forEach(l => {
-        const bx = l.x
-        const by = l.y
-        const endX = bx + (l.cloudX - bx) * 0.3
-        const endY = by + l.vy * 0.06
-
-        // 外层发光（宽+透明）
-        ctx.globalAlpha = 0.15
-        ctx.strokeStyle = '#8888FF'
-        ctx.lineWidth = 8
-        ctx.lineCap = 'round'
-        ctx.lineJoin = 'round'
-        ctx.beginPath()
-        ctx.moveTo(bx, by)
-        const segs = 5
-        for (let s = 1; s <= segs; s++) {
-          const t = s / segs
-          const sx = bx + (endX - bx) * t + (Math.random() - 0.5) * 14
-          const sy = by + (endY - by) * t + (Math.random() - 0.5) * 10
-          ctx.lineTo(sx, sy)
+        // 外层光晕
+        if (lightImg) {
+          const size = 28
+          ctx.globalAlpha = 0.6
+          ctx.drawImage(lightImg, l.x - size / 2, l.y - size / 2, size, size)
+          ctx.globalAlpha = 1
         }
-        ctx.stroke()
-
-        // 中层
-        ctx.globalAlpha = 0.5
-        ctx.strokeStyle = '#FFFF88'
-        ctx.lineWidth = 3
-        ctx.beginPath()
-        ctx.moveTo(bx, by)
-        for (let s = 1; s <= segs; s++) {
-          const t = s / segs
-          const sx = bx + (endX - bx) * t + (Math.random() - 0.5) * 8
-          const sy = by + (endY - by) * t + (Math.random() - 0.5) * 6
-          ctx.lineTo(sx, sy)
+        // 核心亮球
+        if (sparkImg) {
+          const size = 12
+          ctx.globalAlpha = 0.9
+          ctx.drawImage(sparkImg, l.x - size / 2, l.y - size / 2, size, size)
+          ctx.globalAlpha = 1
         }
-        ctx.stroke()
-
-        // 核心白线
-        ctx.globalAlpha = 0.9
-        ctx.strokeStyle = '#FFFFFF'
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        ctx.moveTo(bx, by)
-        for (let s = 1; s <= segs; s++) {
-          const t = s / segs
-          const sx = bx + (endX - bx) * t + (Math.random() - 0.5) * 3
-          const sy = by + (endY - by) * t + (Math.random() - 0.5) * 2
-          ctx.lineTo(sx, sy)
-        }
-        ctx.stroke()
-
-        // 头部光球
+        // 尾部锯齿线（保留程序化）
+        const endX = l.x + (l.cloudX - l.x) * 0.3
+        const endY = l.y + l.vy * 0.06
         ctx.globalAlpha = 0.7
-        ctx.fillStyle = '#FFFFAA'
+        ctx.strokeStyle = '#FFFFAA'
+        ctx.lineWidth = 2
+        ctx.lineCap = 'round'
         ctx.beginPath()
-        ctx.arc(bx, by, 5, 0, Math.PI * 2)
-        ctx.fill()
+        ctx.moveTo(l.x, l.y)
+        const segs = 4
+        for (let s = 1; s <= segs; s++) {
+          const t = s / segs
+          ctx.lineTo(
+            l.x + (endX - l.x) * t + (Math.random() - 0.5) * 6,
+            l.y + (endY - l.y) * t + (Math.random() - 0.5) * 4
+          )
+        }
+        ctx.stroke()
         ctx.globalAlpha = 1
       })
     }
 
-    // 鲸鱼（精灵图优先，回退到程序化绘制）
-    if (data.whale && data.whale.state !== 'hidden') {
-      const wh = data.whale
-      const t = this.time
-
-      if (wh.state === 'warning') {
-        this._renderWhaleWarning(ctx, wh)
-      } else {
-        if (this.whaleSprite) {
-          // 使用 Kenney 精灵图
-          const spriteSize = 64
-          const drawSize = 70
-          ctx.save()
-          ctx.translate(wh.x, wh.y)
-          const facingRight = (wh.targetX || wh.x) >= wh.x
-          if (!facingRight) ctx.scale(-1, 1)
-          ctx.globalAlpha = wh.state === 'jumping' ? 1 : 0.9
-          ctx.drawImage(this.whaleSprite, -drawSize / 2, -drawSize / 2, drawSize, drawSize)
-          ctx.restore()
+    // 鲸鱼
+    if (data.whale && data.whale.state === 'warning') {
+      // 预警漩涡
+      const wx = data.whale.x
+      const wy = WORLD.waterY
+      const wt = this.time
+      const progress = data.whale.timer / 1.5
+      const baseRadius = 25 + (1 - progress) * 15
+      ctx.strokeStyle = `rgba(100,160,220,${0.3 + (1 - progress) * 0.3})`
+      ctx.lineWidth = 2.5
+      ctx.beginPath(); ctx.arc(wx, wy, baseRadius, 0, Math.PI * 2); ctx.stroke()
+      const innerR = baseRadius * 0.6
+      ctx.strokeStyle = `rgba(150,200,240,${0.2 + (1 - progress) * 0.2})`
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      for (let a = 0; a < Math.PI * 4; a += 0.2) {
+        const spiralR = innerR * (1 - a / (Math.PI * 4))
+        const sx = wx + Math.cos(a + wt * 3) * spiralR
+        const sy = wy + Math.sin(a + wt * 3) * spiralR * 0.4
+        if (a === 0) {
+          ctx.moveTo(sx, sy)
         } else {
-          // 回退：程序化身体
-          if (wh.state === 'jumping' || wh.state === 'charging') {
-            const trailCount = 5
-            for (let i = 0; i < trailCount; i++) {
-              const tp = i / trailCount
-              const tx = (wh.x || 0) - (wh.launchVx || 0) * tp
-              const ty = WORLD.waterY - (wh.launchVy || -400) * tp + 600 * tp * tp
-              ctx.fillStyle = `rgba(180,220,255,${(1 - tp) * 0.4})`
-              ctx.beginPath()
-              ctx.arc(tx, ty, 3 + tp * 3, 0, Math.PI * 2)
-              ctx.fill()
-            }
-            this._renderWhaleBody(ctx, wh, t)
-            if (wh.state === 'jumping') {
-              for (let i = 0; i < 6; i++) {
-                const angle = Math.PI + (i / 5) * Math.PI
-                const dist = 10 + Math.random() * 15
-                ctx.fillStyle = 'rgba(200,230,255,0.5)'
-                ctx.beginPath()
-                ctx.arc(wh.x + Math.cos(angle) * dist, WORLD.waterY + Math.sin(angle) * dist * 0.4, 1.5 + Math.random() * 2, 0, Math.PI * 2)
-                ctx.fill()
-              }
-            }
-          } else {
-            this._renderWhaleBody(ctx, wh, t)
-            if (wh.state === 'returning') {
-              ctx.fillStyle = 'rgba(200,230,255,0.4)'
-              ctx.beginPath()
-              ctx.ellipse(wh.x, WORLD.waterY, 25, 6, 0, 0, Math.PI * 2)
-              ctx.fill()
-            }
-          }
+          ctx.lineTo(sx, sy)
         }
       }
+      ctx.stroke()
+      for (let i = 0; i < 6; i++) {
+        const bx = wx + Math.sin(wt * 2 + i * 1.3) * (15 + i * 4)
+        const by = wy - 5 - (i * 8 + wt * 20) % 40
+        ctx.fillStyle = `rgba(180,220,255,${0.3 + Math.sin(wt * 3 + i) * 0.2})`
+        ctx.beginPath(); ctx.arc(bx, by, 2 + Math.sin(wt * 4 + i) * 1, 0, Math.PI * 2); ctx.fill()
+      }
+    } else if (data.whale && data.whale.state !== 'hidden') {
+      const wh = data.whale
+      ctx.globalAlpha = 0.6
+      ctx.fillStyle = '#3D7EA0'
+      ctx.beginPath()
+      ctx.ellipse(wh.x, wh.y, 38, 18, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = 'rgba(240,248,255,0.3)'
+      ctx.beginPath()
+      ctx.ellipse(wh.x, wh.y + 6, 24, 9, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 1
     }
 
     // 缩圈边界（虚线 + 低透明度）
@@ -235,123 +223,8 @@ export class Renderer {
     this.hud.render(ctx, camera, data)
   }
 
-  // 鲸鱼预警：漩涡 + 气泡动画
-  _renderWhaleWarning(ctx, whale) {
-    const x = whale.x
-    const y = WORLD.waterY
-    const t = this.time
-    const progress = whale.timer / 1.5 // 1.5s 预警总时长
-
-    // 漩涡圆环（扩大 + 淡出）
-    const baseRadius = 25 + (1 - progress) * 15
-    ctx.strokeStyle = `rgba(100,160,220,${0.3 + (1 - progress) * 0.3})`
-    ctx.lineWidth = 2.5
-    ctx.beginPath()
-    ctx.arc(x, y, baseRadius, 0, Math.PI * 2)
-    ctx.stroke()
-
-    // 内圈漩涡
-    const innerR = baseRadius * 0.6
-    ctx.strokeStyle = `rgba(150,200,240,${0.2 + (1 - progress) * 0.2})`
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    for (let a = 0; a < Math.PI * 4; a += 0.2) {
-      const spiralR = innerR * (1 - a / (Math.PI * 4))
-      const sx = x + Math.cos(a + t * 3) * spiralR
-      const sy = y + Math.sin(a + t * 3) * spiralR * 0.4
-      if (a === 0) ctx.moveTo(sx, sy)
-      else ctx.lineTo(sx, sy)
-    }
-    ctx.stroke()
-
-    // 气泡粒子
-    for (let i = 0; i < 6; i++) {
-      const bx = x + Math.sin(t * 2 + i * 1.3) * (15 + i * 4)
-      const by = y - 5 - (i * 8 + t * 20) % 40
-      const ba = 0.3 + Math.sin(t * 3 + i) * 0.2
-      ctx.fillStyle = `rgba(180,220,255,${ba})`
-      ctx.beginPath()
-      ctx.arc(bx, by, 2 + Math.sin(t * 4 + i) * 1, 0, Math.PI * 2)
-      ctx.fill()
-    }
-
-    // 水面波纹
-    ctx.strokeStyle = `rgba(100,180,220,${0.4 + (1 - progress) * 0.3})`
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    for (let dx = -30; dx <= 30; dx += 4) {
-      const waveY = y + Math.sin(dx * 0.3 + t * 6) * 3
-      if (dx === -30) ctx.moveTo(x + dx, waveY)
-      else ctx.lineTo(x + dx, waveY)
-    }
-    ctx.stroke()
-  }
-
   // 鲸鱼分段身体渲染
   _renderWhaleBody(ctx, whale, t) {
-    const x = whale.x
-    const y = whale.y
-    const facingRight = whale.targetX > whale.x
-
-    ctx.save()
-    ctx.translate(x, y)
-    if (!facingRight) ctx.scale(-1, 1)
-
-    // 身体主体 — 深蓝渐变
-    const bodyGrad = ctx.createLinearGradient(0, -20, 0, 20)
-    bodyGrad.addColorStop(0, '#5BA0C8')
-    bodyGrad.addColorStop(0.5, '#3D7EA0')
-    bodyGrad.addColorStop(1, '#2A5F7A')
-    ctx.fillStyle = bodyGrad
-    ctx.beginPath()
-    ctx.ellipse(0, 0, 38, 18, 0, 0, Math.PI * 2)
-    ctx.fill()
-
-    // 腹部白纹
-    ctx.fillStyle = 'rgba(240,248,255,0.45)'
-    ctx.beginPath()
-    ctx.ellipse(0, 6, 24, 9, 0, 0, Math.PI * 2)
-    ctx.fill()
-
-    // 尾鳍（摆动）
-    const tailWag = Math.sin(t * 8) * 0.3
-    ctx.fillStyle = '#2A5F7A'
-    ctx.beginPath()
-    ctx.moveTo(-35, 0)
-    ctx.quadraticCurveTo(-48, -12 + tailWag * 10, -55, -8 + tailWag * 12)
-    ctx.quadraticCurveTo(-50, 0, -55, 8 - tailWag * 12)
-    ctx.quadraticCurveTo(-48, 12 - tailWag * 10, -35, 0)
-    ctx.fill()
-
-    // 背鳍
-    ctx.fillStyle = '#3D7EA0'
-    ctx.beginPath()
-    ctx.moveTo(5, -16)
-    ctx.quadraticCurveTo(10, -26, 20, -16)
-    ctx.fill()
-
-    // 胸鳍
-    const finFlap = Math.sin(t * 4) * 0.2
-    ctx.fillStyle = 'rgba(50,100,140,0.7)'
-    ctx.beginPath()
-    ctx.ellipse(15, 8, 14, 5, 0.3 + finFlap, 0, Math.PI * 2)
-    ctx.fill()
-
-    // 眼睛
-    ctx.fillStyle = '#fff'
-    ctx.beginPath(); ctx.arc(22, -5, 4, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = '#111'
-    ctx.beginPath(); ctx.arc(23.5, -5, 2, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = '#fff'
-    ctx.beginPath(); ctx.arc(24, -5.8, 0.8, 0, Math.PI * 2); ctx.fill()
-
-    // 嘴巴（微笑弧线）
-    ctx.strokeStyle = 'rgba(20,50,70,0.5)'
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    ctx.arc(28, -2, 3, 0.3, Math.PI - 0.3)
-    ctx.stroke()
-
-    ctx.restore()
+    // 已由内联渲染替代，保留为空方法供外部可能调用
   }
 }

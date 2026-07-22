@@ -1,22 +1,25 @@
 // src/engine/AssetLoader.js
 // 预加载所有精灵图资源，供渲染管线使用
 
-const ASSET_BASE = '/assets/'
-
 export const ASSETS = {
-  skyDay: `${ASSET_BASE}sky/Skyboxes/skybox-day.png`,
-  skyMorning: `${ASSET_BASE}sky/Skyboxes/skybox-morning.png`,
-  whaleRound: `${ASSET_BASE}animals/PNG/Round/whale.png`,
-  whaleSquare: `${ASSET_BASE}animals/PNG/Square/whale.png`,
-}
-
-// 粒子精灵映射
-export const PARTICLE_SPRITES = {
-  circle: (i) => `${ASSET_BASE}particles/circle_${String(i).padStart(2,'0')}.png`,
-  light: (i) => `${ASSET_BASE}particles/light_${String(i).padStart(2,'0')}.png`,
-  spark: (i) => `${ASSET_BASE}particles/spark_${String(i).padStart(2,'0')}.png`,
-  star: (i) => `${ASSET_BASE}particles/star_${String(i).padStart(2,'0')}.png`,
-  dirt: (i) => `${ASSET_BASE}particles/dirt_${String(i).padStart(2,'0')}.png`,
+  skyDay: '/assets/sky/Skyboxes/skybox-day.png',
+  skyMorning: '/assets/sky/Skyboxes/skybox-morning.png',
+  // 动物精灵（Kenney Animal Pack CC0）
+  animalPanda: '/assets/animals/PNG/Round/panda.png',
+  animalSloth: '/assets/animals/PNG/Round/sloth.png',
+  animalChick: '/assets/animals/PNG/Round/chick.png',
+  animalGorilla: '/assets/animals/PNG/Round/gorilla.png',
+  animalRhino: '/assets/animals/PNG/Round/rhino.png',
+  // 闪电云精灵
+  cloudSprite: '/assets/cloud.png',
+  // 粒子
+  particleCircle01: '/assets/particles/PNG (Transparent)/circle_01.png',
+  particleCircle02: '/assets/particles/PNG (Transparent)/circle_02.png',
+  particleLight01: '/assets/particles/PNG (Transparent)/light_01.png',
+  particleSpark01: '/assets/particles/PNG (Transparent)/spark_01.png',
+  particleStar01: '/assets/particles/PNG (Transparent)/star_01.png',
+  particleDirt01: '/assets/particles/PNG (Transparent)/dirt_01.png',
+  foliageSheet: '/assets/foliage/Spritesheet/foliagePack_default.png',
 }
 
 export class AssetLoader {
