@@ -48,6 +48,21 @@ export class Renderer {
   /** 预加载所有外部精灵资源 */
   async loadAssets() {
     await this.bg.loadSky()
+    // 加载草叶精灵（Kenney Foliage Pack — 挑 6 个大小不一的变体）
+    const foliageKeys = [
+      'foliagePack_004', 'foliagePack_005', 'foliagePack_006', 'foliagePack_007',
+      'foliagePack_008', 'foliagePack_009', 'foliagePack_010', 'foliagePack_011',
+      'foliagePack_012', 'foliagePack_013',
+    ]
+    this.foliageImages = []
+    const foliageBase = '/assets/foliage/PNG/Default size/'
+    for (const key of foliageKeys) {
+      try {
+        const img = await this.assetLoader.load(foliageBase + key + '.png')
+        if (img.width > 40 && img.height > 30) this.foliageImages.push(img)
+      } catch { /* 忽略加载失败 */ }
+    }
+    this.entityRenderer.setFoliageImages(this.foliageImages)
     // 加载动物精灵图（玩家 + 4种AI各一个）
     const animalKeys = ['animalPanda', 'animalSloth', 'animalChick', 'animalGorilla', 'animalRhino']
     const results = await Promise.allSettled(

@@ -5,12 +5,18 @@ export class EntityRenderer {
   constructor() {
     this._balloonTime = 0
     this._grassCache = new Map()
+    this._foliageImages = []  // 预加载的草叶精灵
     this._buildGrassCache()
     this.animalSprites = null   // { panda, sloth, chick, gorilla, rhino: Image }
   }
 
   update(dt) {
     this._balloonTime += dt
+  }
+
+  /** 从 Renderer 注入草叶精灵图 */
+  setFoliageImages(images) {
+    this._foliageImages = images
   }
 
   /** 从 Renderer 注入动物精灵表，按实体类型查找 */
@@ -475,10 +481,19 @@ export class EntityRenderer {
     ctx.ellipse(cx, cy - 4, plat.w * 0.3, plat.h * 0.35, 0, 0, Math.PI * 2)
     ctx.fill()
 
-    // 草叶贴图（缓存）
-    const grass = this._grassCache.get(plat.w) || this._grassCache.get(140)
-    if (grass) {
-      ctx.drawImage(grass, cx - grass.width / 2, cy - 1)
+    // 草叶贴图（精灵优先，回退到缓存程序化）
+    if (this._foliageImages.length > 0) {
+      const img = this._foliageImages[Math.floor(this._balloonTime * 0.5 + plat.x * 0.1) % this._foliageImages.length]
+      const tw = img.width * 0.8
+      const th = img.height * 0.8
+      for (let x = cx - plat.w / 2; x < cx + plat.w / 2; x += tw * 0.6) {
+        ctx.drawImage(img, x, cy - th * 0.3, tw, th)
+      }
+    } else {
+      const grass = this._grassCache.get(plat.w) || this._grassCache.get(140)
+      if (grass) {
+        ctx.drawImage(grass, cx - grass.width / 2, cy - 1)
+      }
     }
   }
 }
