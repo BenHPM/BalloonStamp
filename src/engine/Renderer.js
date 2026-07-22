@@ -94,19 +94,20 @@ export class Renderer {
     // 气流区（流动粒子 + 边框）
     this.airParticles.render(ctx, AIR_CURRENTS)
 
-    // 小白云（Kenney Cloud.png 精灵优先，回退到程序化圆）
+    // 小白云（程序化蓬松云，非 Kenney 粒子图）
     LIGHTNING_CLOUDS.forEach(lc => {
-      if (this.cloudSprite) {
-        const size = lc.radius * 2
-        ctx.globalAlpha = 0.85
-        ctx.drawImage(this.cloudSprite, lc.x - lc.radius, lc.y - lc.radius, size, size)
-        ctx.globalAlpha = 1
-      } else {
-        ctx.fillStyle = 'rgba(255,255,255,0.8)'
-        ctx.beginPath()
-        ctx.arc(lc.x, lc.y, lc.radius, 0, Math.PI * 2)
-        ctx.fill()
-      }
+      const sz = lc.radius * 1.6
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'
+      ctx.beginPath()
+      ctx.arc(lc.x, lc.y, sz * 0.5, 0, Math.PI * 2)
+      ctx.arc(lc.x - sz * 0.35, lc.y + sz * 0.1, sz * 0.38, 0, Math.PI * 2)
+      ctx.arc(lc.x + sz * 0.35, lc.y + sz * 0.1, sz * 0.38, 0, Math.PI * 2)
+      ctx.arc(lc.x - sz * 0.15, lc.y - sz * 0.2, sz * 0.32, 0, Math.PI * 2)
+      ctx.arc(lc.x + sz * 0.15, lc.y - sz * 0.2, sz * 0.32, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(200,210,230,0.4)'
+      ctx.lineWidth = 1
+      ctx.stroke()
     })
 
     // 闪电（Kenney light_01 光球 + spark_01 火花）
@@ -150,50 +151,69 @@ export class Renderer {
       })
     }
 
-    // 鲸鱼
+    // 鲨鱼（出水警告 → 攻击）
     if (data.whale && data.whale.state === 'warning') {
-      // 预警漩涡
-      const wx = data.whale.x
-      const wy = WORLD.waterY
-      const wt = this.time
+      const sx = data.whale.x
+      const sy = data.whale.y
+      const st = this.time
       const progress = data.whale.timer / 1.5
       const baseRadius = 25 + (1 - progress) * 15
+      // 漩涡
       ctx.strokeStyle = `rgba(100,160,220,${0.3 + (1 - progress) * 0.3})`
       ctx.lineWidth = 2.5
-      ctx.beginPath(); ctx.arc(wx, wy, baseRadius, 0, Math.PI * 2); ctx.stroke()
-      const innerR = baseRadius * 0.6
+      ctx.beginPath(); ctx.arc(sx, sy, baseRadius, 0, Math.PI * 2); ctx.stroke()
       ctx.strokeStyle = `rgba(150,200,240,${0.2 + (1 - progress) * 0.2})`
       ctx.lineWidth = 1.5
       ctx.beginPath()
       for (let a = 0; a < Math.PI * 4; a += 0.2) {
-        const spiralR = innerR * (1 - a / (Math.PI * 4))
-        const sx = wx + Math.cos(a + wt * 3) * spiralR
-        const sy = wy + Math.sin(a + wt * 3) * spiralR * 0.4
-        if (a === 0) {
-          ctx.moveTo(sx, sy)
-        } else {
-          ctx.lineTo(sx, sy)
-        }
+        const spiralR = baseRadius * 0.6 * (1 - a / (Math.PI * 4))
+        const px = sx + Math.cos(a + st * 3) * spiralR
+        const py = sy + Math.sin(a + st * 3) * spiralR * 0.4
+        if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py)
       }
       ctx.stroke()
-      for (let i = 0; i < 6; i++) {
-        const bx = wx + Math.sin(wt * 2 + i * 1.3) * (15 + i * 4)
-        const by = wy - 5 - (i * 8 + wt * 20) % 40
-        ctx.fillStyle = `rgba(180,220,255,${0.3 + Math.sin(wt * 3 + i) * 0.2})`
-        ctx.beginPath(); ctx.arc(bx, by, 2 + Math.sin(wt * 4 + i) * 1, 0, Math.PI * 2); ctx.fill()
-      }
-    } else if (data.whale && data.whale.state !== 'hidden') {
-      const wh = data.whale
-      ctx.globalAlpha = 0.6
-      ctx.fillStyle = '#3D7EA0'
+    } else if (data.shark && data.shark.state !== 'hidden') {
+      const sh = data.shark
+      // 鲨鱼身体（灰蓝 + 白色腹部）
+      ctx.save()
+      ctx.translate(sh.x, sh.y)
+      const flip = sh.vx < 0 ? 1 : -1
+      ctx.scale(flip, 1)
+      // 身体
+      ctx.fillStyle = '#5B7B8A'
       ctx.beginPath()
-      ctx.ellipse(wh.x, wh.y, 38, 18, 0, 0, Math.PI * 2)
+      ctx.ellipse(0, 0, 38, 16, 0, 0, Math.PI * 2)
       ctx.fill()
-      ctx.fillStyle = 'rgba(240,248,255,0.3)'
+      // 腹部
+      ctx.fillStyle = 'rgba(240,248,255,0.6)'
       ctx.beginPath()
-      ctx.ellipse(wh.x, wh.y + 6, 24, 9, 0, 0, Math.PI * 2)
+      ctx.ellipse(0, 4, 30, 9, 0, 0, Math.PI * 2)
       ctx.fill()
-      ctx.globalAlpha = 1
+      // 背鳍
+      ctx.fillStyle = '#4A6875'
+      ctx.beginPath()
+      ctx.moveTo(-5, -14)
+      ctx.lineTo(-10, -26)
+      ctx.lineTo(5, -14)
+      ctx.fill()
+      // 尾鳍
+      ctx.beginPath()
+      ctx.moveTo(-32, -2)
+      ctx.lineTo(-44, -12)
+      ctx.lineTo(-44, 8)
+      ctx.fill()
+      // 眼睛
+      ctx.fillStyle = '#fff'
+      ctx.beginPath(); ctx.arc(18, -4, 4, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#000'
+      ctx.beginPath(); ctx.arc(19, -4, 2, 0, Math.PI * 2); ctx.fill()
+      // 鳃裂
+      ctx.strokeStyle = '#3D5A66'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(10, -10); ctx.lineTo(8, -6); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(10, -6); ctx.lineTo(8, -2); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(10, -2); ctx.lineTo(8, 2); ctx.stroke()
+      ctx.restore()
     }
 
     // 缩圈边界（虚线 + 低透明度）

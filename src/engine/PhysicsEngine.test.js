@@ -40,9 +40,9 @@ describe('PhysicsEngine', () => {
     phys.update(entity, flap, 1/60)
     // 加法脉冲 + 同帧重力：
     // vy = 100 + (gravity - buoyancy[2]) * dt + flapImpulse[2]
-    //    = 100 + (650-530)/60 + (-170) = 100 + 2.0 - 170 = -68.0
+    //    = 100 + (650-530)/60 + (-150) = 100 + 2.0 - 150 = -48.0
     expect(entity.vy).toBeLessThan(0) // 向上
-    expect(entity.vy).toBeCloseTo(100 + (650 - 530) / 60 + (-170), 1) // 加法而非覆盖
+    expect(entity.vy).toBeCloseTo(100 + (650 - 530) / 60 + PHYS.flapImpulse[2], 1) // 加法而非覆盖
   })
 
   it('flap respects terminal velocity up', () => {
@@ -146,8 +146,8 @@ describe('PhysicsEngine', () => {
     const phys = new PhysicsEngine()
     const entity = { x: 100, y: 100, vx: 0, vy: 50, balloons: 2, width: 20, height: 30, onGround: false }
     phys.applyStompBounce(entity)
-    // 加法脉冲：vy = 50 + (-170 * 0.75) = 50 - 127.5 = -77.5
+    // 加法脉冲：vy = 50 + (-150 * 0.75) = 50 - 112.5 = -62.5
     expect(entity.vy).toBeLessThan(0) // 向上弹跳
-    expect(entity.vy).toBeCloseTo(50 + (-170 * 0.75), 1)
+    expect(entity.vy).toBeCloseTo(50 + (-150 * 0.75), 1)
   })
 })
