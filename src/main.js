@@ -24,12 +24,12 @@ assetLoader.loadAll([
   '/assets/animals/PNG/Round/gorilla.png',
   '/assets/animals/PNG/Round/rhino.png',
   '/assets/cloud.png',
-  '/assets/particles/PNG (Transparent)/circle_01.png',
-  '/assets/particles/PNG (Transparent)/circle_02.png',
-  '/assets/particles/PNG (Transparent)/light_01.png',
-  '/assets/particles/PNG (Transparent)/spark_01.png',
-  '/assets/particles/PNG (Transparent)/star_01.png',
-]).then(() => engine.renderer.loadAssets()).catch(() => {})
+  '/assets/particles/PNG%20(Transparent)/circle_01.png',
+  '/assets/particles/PNG%20(Transparent)/circle_02.png',
+  '/assets/particles/PNG%20(Transparent)/light_01.png',
+  '/assets/particles/PNG%20(Transparent)/spark_01.png',
+  '/assets/particles/PNG%20(Transparent)/star_01.png',
+]).then(() => engine.renderer.loadAssets()).catch(e => console.error('[AssetLoader]', e))
 
 function startGame() {
   const playState = new PlayState()

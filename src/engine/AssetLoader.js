@@ -13,12 +13,12 @@ export const ASSETS = {
   // 闪电云精灵
   cloudSprite: '/assets/cloud.png',
   // 粒子
-  particleCircle01: '/assets/particles/PNG (Transparent)/circle_01.png',
-  particleCircle02: '/assets/particles/PNG (Transparent)/circle_02.png',
-  particleLight01: '/assets/particles/PNG (Transparent)/light_01.png',
-  particleSpark01: '/assets/particles/PNG (Transparent)/spark_01.png',
-  particleStar01: '/assets/particles/PNG (Transparent)/star_01.png',
-  particleDirt01: '/assets/particles/PNG (Transparent)/dirt_01.png',
+  particleCircle01: '/assets/particles/PNG%20(Transparent)/circle_01.png',
+  particleCircle02: '/assets/particles/PNG%20(Transparent)/circle_02.png',
+  particleLight01: '/assets/particles/PNG%20(Transparent)/light_01.png',
+  particleSpark01: '/assets/particles/PNG%20(Transparent)/spark_01.png',
+  particleStar01: '/assets/particles/PNG%20(Transparent)/star_01.png',
+  particleDirt01: '/assets/particles/PNG%20(Transparent)/dirt_01.png',
   foliageSheet: '/assets/foliage/Spritesheet/foliagePack_default.png',
 }
 

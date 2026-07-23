@@ -48,20 +48,22 @@ export class Renderer {
   /** 预加载所有外部精灵资源 */
   async loadAssets() {
     await this.bg.loadSky()
-    // 加载草叶精灵（Kenney Foliage Pack — 挑 6 个大小不一的变体）
+    // 加载草叶精灵（Kenney Foliage Pack）
     const foliageKeys = [
       'foliagePack_004', 'foliagePack_005', 'foliagePack_006', 'foliagePack_007',
       'foliagePack_008', 'foliagePack_009', 'foliagePack_010', 'foliagePack_011',
       'foliagePack_012', 'foliagePack_013',
     ]
     this.foliageImages = []
-    const foliageBase = '/assets/foliage/PNG/Default size/'
-    for (const key of foliageKeys) {
-      try {
-        const img = await this.assetLoader.load(foliageBase + key + '.png')
-        if (img.width > 40 && img.height > 30) this.foliageImages.push(img)
-      } catch { /* 忽略加载失败 */ }
-    }
+    const foliageBase = '/assets/foliage/PNG/Default%20size/'
+    const foliageResults = await Promise.allSettled(
+      foliageKeys.map(k => this.assetLoader.load(foliageBase + k + '.png'))
+    )
+    foliageResults.forEach(r => {
+      if (r.status === 'fulfilled' && r.value.width > 40 && r.value.height > 30) {
+        this.foliageImages.push(r.value)
+      }
+    })
     this.entityRenderer.setFoliageImages(this.foliageImages)
     // 加载动物精灵图（玩家 + 4种AI各一个）
     const animalKeys = ['animalPanda', 'animalSloth', 'animalChick', 'animalGorilla', 'animalRhino']
@@ -187,8 +189,8 @@ export class Renderer {
         if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py)
       }
       ctx.stroke()
-    } else if (data.shark && data.shark.state !== 'hidden') {
-      const sh = data.shark
+    } else if (data.whale && data.whale.state !== 'hidden') {
+      const sh = data.whale
       // 鲨鱼身体（灰蓝 + 白色腹部）
       ctx.save()
       ctx.translate(sh.x, sh.y)
